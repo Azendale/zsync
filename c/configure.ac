@@ -12,6 +12,7 @@ AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip foreign check-news -Woverride -Wobsole
 AM_MAINTAINER_MODE
 
 dnl --- Check for programs
+AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_LN_S
 AC_PROG_RANLIB
