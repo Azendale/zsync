@@ -191,7 +191,7 @@ struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
  * Returns a (malloced) string of the alphanumeric leading segment of the
  * filename in the given file path.
  */
-extern "C" char *get_filename_prefix(const char *p) {
+char *get_filename_prefix(const char *p) {
     char *s = strdup(p);
     char *t = strrchr(s, '/');
     char *u;
@@ -407,7 +407,7 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
     return 0;
 }
 
-extern "C" int set_mtime(const char* filename, time_t mtime) {
+int set_mtime(const char* filename, time_t mtime) {
     struct stat s;
     struct utimbuf u;
 
