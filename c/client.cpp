@@ -16,6 +16,8 @@
 
 /* zsync command-line client program */
 
+#include <vector>
+
 #include "zsglobal.h"
 
 #include <stdio.h>

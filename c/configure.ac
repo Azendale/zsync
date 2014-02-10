@@ -3,6 +3,8 @@
 AC_PREREQ
 AC_INIT([zsync],[0.6.2],[http://zsync.moria.org.uk/])
 
+AC_USE_SYSTEM_EXTENSIONS
+
 AC_CONFIG_SRCDIR([client.cpp])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([autotools])
@@ -27,6 +29,7 @@ AS_IF([test "x$enable_profile" = "xyes"], [
 dnl --- Header files, typedefs, structures, libraries
 AC_C_CONST
 AC_HEADER_STDC
+
 # string.h, memory.h, stdlib.h both included in the default header checks
 # but we do need to give at least one .h to test, or Solaris sh errors
 AC_CHECK_HEADERS([string.h])
@@ -70,7 +73,8 @@ case $host_os in
        LIBS="${LIBS} -lwsock32"
        ;;
    *)
-       AC_DEFINE([_XOPEN_SOURCE], 600, [Enable POSIX extensions if present])
+dnl - C++ vector already sets this to 700, at least on linux       AC_DEFINE([_XOPEN_SOURCE], 600, [Enable POSIX extensions if present])
+dnl AC_USE_SYSTEM_EXTENSIONS seems to be the way to do this, see http://lists.x.org/archives/xorg-devel/2013-July/036895.html
        AC_DEFINE([_BSD_SOURCE],1, [Enable BSD extensions if present])
        ;;
 esac
