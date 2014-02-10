@@ -34,11 +34,14 @@
 # include <dmalloc.h>
 #endif
 
+// Let C++ compiler know these are C functions, and therefore will not have name mangled names
+extern "C" {
 #include "libzsync/zsync.h"
 
 #include "http.h"
 #include "url.h"
 #include "progress.h"
+}
 
 /* FILE* f = open_zcat_pipe(file_str)
  * Returns a (popen) filehandle which when read returns the un-gzipped content
@@ -49,7 +52,7 @@
 FILE* open_zcat_pipe(const char* fname)
 {
     /* Get buffer to build command line */
-    char *cmd = malloc(6 + strlen(fname) * 2);
+    char *cmd = (char *) malloc(6 + strlen(fname) * 2);
     if (!cmd)
         return NULL;
 
@@ -146,10 +149,10 @@ long long http_down;
  * number of entries is passed by reference and updated in place. The new entry
  * is appended to the list.
  */
-static void **append_ptrlist(int *n, void **p, void *a) {
+void **append_ptrlist(int *n, void **p, void *a) {
     if (!a)
         return p;
-    p = realloc(p, (*n + 1) * sizeof *p);
+    p = (void **)realloc(p, (*n + 1) * sizeof *p);
     if (!p) {
         fprintf(stderr, "out of memory\n");
         exit(1);
@@ -207,7 +210,7 @@ struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
  * Returns a (malloced) string of the alphanumeric leading segment of the
  * filename in the given file path.
  */
-static char *get_filename_prefix(const char *p) {
+extern "C" char *get_filename_prefix(const char *p) {
     char *s = strdup(p);
     char *t = strrchr(s, '/');
     char *u;
@@ -269,7 +272,7 @@ char *get_filename(const struct zsync_state *zs, const char *source_name) {
 
 /* prog = calc_zsync_progress(zs)
  * Returns the progress ratio 0..1 (none...done) for the given zsync_state */
-static float calc_zsync_progress(const struct zsync_state *zs) {
+extern "C" float calc_zsync_progress(const struct zsync_state *zs) {
     long long zgot, ztot;
 
     zsync_progress(zs, &zgot, &ztot);
@@ -317,7 +320,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
         fprintf(stderr, "downloading from %s:", u);
 
     /* Create a read buffer */
-    buf = malloc(BUFFERSIZE);
+    buf = (unsigned char *)malloc(BUFFERSIZE);
     if (!buf) {
         zsync_end_receive(zr);
         range_fetch_end(rf);
@@ -400,21 +403,21 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
         fprintf(stderr, "no URLs available from zsync?");
         return 1;
     }
-    status = calloc(n, sizeof *status);
+    status = (int *)calloc(n, sizeof *status);
 
     /* Keep going until we're done or have no useful URLs left */
     while (zsync_status(zs) < 2 && ok_urls) {
         /* Still need data; pick a URL to use. */
-        int try = rand() % n;
+        int thisTry = rand() % n;
 
-        if (!status[try]) {
-            const char *tryurl = url[try];
+        if (!status[thisTry]) {
+            const char *tryurl = url[thisTry];
 
             /* Try fetching data from this URL */
             int rc = fetch_remaining_blocks_http(zs, tryurl, utype);
             if (rc != 0) {
                 fprintf(stderr, "failed to retrieve from %s\n", tryurl);
-                status[try] = 1;
+                status[thisTry] = 1;
                 ok_urls--;
             }
         }
@@ -423,7 +426,7 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
     return 0;
 }
 
-static int set_mtime(char* filename, time_t mtime) {
+extern "C" int set_mtime(char* filename, time_t mtime) {
     struct stat s;
     struct utimbuf u;
 
@@ -488,7 +491,7 @@ int main(int argc, char **argv) {
                 filename = strdup(optarg);
                 break;
             case 'i':
-                seedfiles = append_ptrlist(&nseedfiles, seedfiles, optarg);
+                seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, optarg);
                 break;
             case 'V':
                 printf(PACKAGE " v" VERSION " (compiled " __DATE__ " " __TIME__
@@ -535,7 +538,7 @@ int main(int argc, char **argv) {
     /* Get eventual filename for output, and filename to write to while working */
     if (!filename)
         filename = get_filename(zs, argv[optind]);
-    temp_file = malloc(strlen(filename) + 6);
+    temp_file = (char *)malloc(strlen(filename) + 6);
     strcpy(temp_file, filename);
     strcat(temp_file, ".part");
 
@@ -546,7 +549,7 @@ int main(int argc, char **argv) {
         /* If the target file already exists, we're probably updating that file
          * - so it's a seed file */
         if (!access(filename, R_OK)) {
-            seedfiles = append_ptrlist(&nseedfiles, seedfiles, filename);
+            seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, filename);
         }
         /* If the .part file exists, it's probably an interrupted earlier
          * effort; a normal HTTP client would 'resume' from where it got to,
@@ -554,7 +557,7 @@ int main(int argc, char **argv) {
          * current version on the remote) and doesn't need to, because we can
          * treat it like any other local source of data. Use it now. */
         if (!access(temp_file, R_OK)) {
-            seedfiles = append_ptrlist(&nseedfiles, seedfiles, temp_file);
+            seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, temp_file);
         }
 
         /* Try any seed files supplied by the command line */
@@ -638,7 +641,7 @@ int main(int argc, char **argv) {
 
     /* STEP 5: Move completed .part file into place as the final target */
     if (filename) {
-        char *oldfile_backup = malloc(strlen(filename) + 8);
+        char *oldfile_backup = (char *)malloc(strlen(filename) + 8);
         int ok = 1;
 
         strcpy(oldfile_backup, filename);

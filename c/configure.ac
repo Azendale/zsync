@@ -2,7 +2,7 @@
 
 AC_INIT([zsync],[0.6.2],[http://zsync.moria.org.uk/])
 
-AC_CONFIG_SRCDIR([client.c])
+AC_CONFIG_SRCDIR([client.cpp])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([autotools])
 
