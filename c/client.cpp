@@ -17,6 +17,7 @@
 /* zsync command-line client program */
 
 #include <vector>
+#include <string>
 
 #include "zsglobal.h"
 
@@ -141,28 +142,6 @@ void read_seed_file(struct zsync_state *z, const char *fname) {
 }
 
 long long http_down;
-
-/* A ptrlist is a very simple structure for storing lists of pointers. This is
- * the only function in its API. The structure (not actually a struct) consists
- * of a (pointer to a) void*[] and an int giving the number of entries.
- *
- * ptrlist = append_ptrlist(&entries, ptrlist, new_entry)
- * Like realloc(2), this returns the new location of the ptrlist array; the
- * number of entries is passed by reference and updated in place. The new entry
- * is appended to the list.
- */
-void **append_ptrlist(int *n, void **p, void *a) {
-    if (!a)
-        return p;
-    p = (void **)realloc(p, (*n + 1) * sizeof *p);
-    if (!p) {
-        fprintf(stderr, "out of memory\n");
-        exit(1);
-    }
-    p[*n] = a;
-    (*n)++;
-    return p;
-}
 
 /* zs = read_zsync_control_file(location_str, filename)
  * Reads a zsync control file from either a URL or filename specified in
@@ -428,7 +407,7 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
     return 0;
 }
 
-extern "C" int set_mtime(char* filename, time_t mtime) {
+extern "C" int set_mtime(const char* filename, time_t mtime) {
     struct stat s;
     struct utimbuf u;
 
@@ -453,10 +432,10 @@ extern "C" int set_mtime(char* filename, time_t mtime) {
  * Main program */
 int main(int argc, char **argv) {
     struct zsync_state *zs;
-    char *temp_file = NULL;
-    char **seedfiles = NULL;
-    int nseedfiles = 0;
-    char *filename = NULL;
+    std::string temp_file;
+    // "List" (vector, really) of strings, one each per seed file name.
+    std::vector<std::string> seedfiles;
+    std::string filename;
     long long local_used;
     char *zfname = NULL;
     time_t mtime;
@@ -489,11 +468,10 @@ int main(int argc, char **argv) {
                 zfname = strdup(optarg);
                 break;
             case 'o':
-                free(filename);
-                filename = strdup(optarg);
+                filename = optarg;
                 break;
             case 'i':
-                seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, optarg);
+                seedfiles.push_back(std::string(optarg));
                 break;
             case 'V':
                 printf(PACKAGE " v" VERSION " (compiled " __DATE__ " " __TIME__
@@ -538,32 +516,38 @@ int main(int argc, char **argv) {
         exit(1);
 
     /* Get eventual filename for output, and filename to write to while working */
-    if (!filename)
+    if (filename.empty())
         filename = get_filename(zs, argv[optind]);
-    temp_file = (char *)malloc(strlen(filename) + 6);
-    strcpy(temp_file, filename);
-    strcat(temp_file, ".part");
-
+    // filename is a std::string, so it will overload the + operator
+    temp_file = filename + ".part";
+    const char * temp_file_cstr = temp_file.c_str();
+    
     {   /* STEP 2: read available local data and fill in what we know in the
          *target file */
-        int i;
+        size_t i;
 
         /* If the target file already exists, we're probably updating that file
          * - so it's a seed file */
-        if (!access(filename, R_OK)) {
-            seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, filename);
+        // cstring for the access function until I know what it is and if it will take std::string
+        const char * filename_cstr = filename.c_str();
+        if (!access(filename_cstr, R_OK)) {
+            seedfiles.push_back(filename);
         }
+        delete [] filename_cstr;
         /* If the .part file exists, it's probably an interrupted earlier
          * effort; a normal HTTP client would 'resume' from where it got to,
          * but zsync can't (because we don't know this data corresponds to the
          * current version on the remote) and doesn't need to, because we can
          * treat it like any other local source of data. Use it now. */
-        if (!access(temp_file, R_OK)) {
-            seedfiles = (char **)append_ptrlist(&nseedfiles, (void **)seedfiles, temp_file);
+        // cstring for the access function until I know what it is and if it will take std::string
+        
+        if (!access(temp_file_cstr, R_OK)) {
+            seedfiles.push_back(temp_file);
         }
 
+
         /* Try any seed files supplied by the command line */
-        for (i = 0; i < nseedfiles; i++) {
+        for (i = 0; i < seedfiles.size(); i++) {
             int dup = 0, j;
 
             /* And stop reading seed files once the target is complete. */
@@ -571,14 +555,23 @@ int main(int argc, char **argv) {
 
             /* Skip dups automatically, to save the person running the program
              * having to worry about this stuff. */
+            // Look through all files processed so far, and see if this one is a
+            // duplicate of them. Since we are using std::string, we can just use
+            // the == operator to compare.
             for (j = 0; j < i; j++) {
-                if (!strcmp(seedfiles[i],seedfiles[j])) dup = 1;
+                if (seedfiles[i] == seedfiles[j]) {
+                    dup = 1;
+                }
             }
 
             /* And now, if not a duplicate, read it */
-            if (!dup)
-                read_seed_file(zs, seedfiles[i]);
+            if (!dup) {
+                const char * seedfile_i_cstr = seedfiles[i].c_str();
+                read_seed_file(zs, seedfile_i_cstr);
+                delete [] seedfile_i_cstr;
+            }
         }
+        
         /* Show how far that got us */
         zsync_progress(zs, &local_used, NULL);
 
@@ -599,7 +592,7 @@ int main(int argc, char **argv) {
      * in-progress run (which should be a superset of the old .part - unless
      * the content changed, in which case it still contains anything relevant
      * from the old .part). */
-    if (zsync_rename_file(zs, temp_file) != 0) {
+    if (zsync_rename_file(zs, temp_file_cstr) != 0) {
         perror("rename");
         exit(1);
     }
@@ -608,7 +601,7 @@ int main(int argc, char **argv) {
     if (fetch_remaining_blocks(zs) != 0) {
         fprintf(stderr,
                 "failed to retrieve all remaining blocks - no valid download URLs remain. Incomplete transfer left in %s.\n(If this is the download filename with .part appended, zsync will automatically pick this up and reuse the data it has already done if you retry in this dir.)\n",
-                temp_file);
+                temp_file_cstr);
         exit(3);
     }
 
@@ -620,7 +613,7 @@ int main(int argc, char **argv) {
         r = zsync_complete(zs);
         switch (r) {
         case -1:
-            fprintf(stderr, "Aborting, download available in %s\n", temp_file);
+            fprintf(stderr, "Aborting, download available in %s\n", temp_file_cstr);
             exit(2);
         case 0:
             if (!no_progress)
@@ -632,69 +625,76 @@ int main(int argc, char **argv) {
             break;
         }
     }
-
-    free(temp_file);
+    
+    delete [] temp_file_cstr;
 
     /* Get any mtime that we is suggested to set for the file, and then shut
      * down the zsync_state as we are done on the file transfer. Getting the
      * current name of the file at the same time. */
     mtime = zsync_mtime(zs);
-    temp_file = zsync_end(zs);
+    temp_file_cstr = zsync_end(zs);
 
     /* STEP 5: Move completed .part file into place as the final target */
-    if (filename) {
-        char *oldfile_backup = (char *)malloc(strlen(filename) + 8);
+    if (!filename.empty()) {
+        std::string oldfile_backup;
+        const char * filename_cstr = filename.c_str();
         int ok = 1;
 
-        strcpy(oldfile_backup, filename);
-        strcat(oldfile_backup, ".zs-old");
+        oldfile_backup = filename;
+        oldfile_backup += ".zs-old";
+        
+        const char * oldfile_backup_cstr = oldfile_backup.c_str();
 
-        if (!access(filename, F_OK)) {
+        if (!access(filename_cstr, F_OK)) {
             /* Backup the old file. */
             /* First, remove any previous backup. We don't care if this fails -
              * the link below will catch any failure */
-            unlink(oldfile_backup);
+            unlink(oldfile_backup_cstr);
 
             /* Try linking the filename to the backup file name, so we will 
                atomically replace the target file in the next step.
                If that fails due to EPERM, it is probably a filesystem that
                doesn't support hard-links - so try just renaming it to the
                backup filename. */
-            if (link(filename, oldfile_backup) != 0
-                && (errno != EPERM || rename(filename, oldfile_backup) != 0)) {
+            if (link(filename_cstr, oldfile_backup_cstr) != 0
+                && (errno != EPERM || rename(filename_cstr, oldfile_backup_cstr) != 0)) {
                 perror("linkname");
                 fprintf(stderr,
                         "Unable to back up old file %s - completed download left in %s\n",
-                        filename, temp_file);
+                        filename_cstr, temp_file_cstr);
                 ok = 0;         /* Prevent overwrite of old file below */
             }
         }
         if (ok) {
             /* Rename the file to the desired name */
-            if (rename(temp_file, filename) == 0) {
+            if (rename(temp_file_cstr, filename_cstr) == 0) {
                 /* final, final thing - set the mtime on the file if we have one */
-                if (mtime != -1) set_mtime(filename, mtime);
+                if (mtime != -1) {
+                    set_mtime(filename_cstr, mtime);
+                }
             }
             else {
                 perror("rename");
                 fprintf(stderr,
                         "Unable to back up old file %s - completed download left in %s\n",
-                        filename, temp_file);
+                        filename_cstr, temp_file_cstr);
             }
         }
-        free(oldfile_backup);
-        free(filename);
+        // std::string that is oldfile_backup will automatically be released when it goes out of scope.
+        // Just need to free the dynamic memory we allocated when we made a cstring from it.
+        delete [] oldfile_backup_cstr;
+        delete [] filename_cstr;
     }
     else {
         printf
             ("No filename specified for download - completed download left in %s\n",
-             temp_file);
+             temp_file_cstr);
     }
 
     /* Final stats and cleanup */
     if (!no_progress)
         printf("used %lld local, fetched %lld\n", local_used, http_down);
     free(referer);
-    free(temp_file);
+    delete [] temp_file_cstr;
     return 0;
 }
