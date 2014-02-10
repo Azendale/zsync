@@ -1,5 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 
+AC_PREREQ
 AC_INIT([zsync],[0.6.2],[http://zsync.moria.org.uk/])
 
 AC_CONFIG_SRCDIR([client.cpp])
@@ -31,6 +32,20 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS([string.h])
 AC_TYPE_SIZE_T
 AC_CHECK_FUNCS(memcpy pwrite pread mkstemp)
+
+dnl Added at suggestion of autoscan before C++ port removed any C code
+AC_CHECK_FUNCS([malloc] [realloc] [mktime] [ftruncate] [gethostbyaddr] [gethostbyname] [inet_ntoa] [memchr] [memmove] [memset] [socket] [strcasecmp] [strchr] [strcspn] [strdup] [strerror] [strncasecmp] [strrchr] [strstr] [utime])
+AC_CHECK_HEADERS([arpa/inet.h] [fcntl.h] [libintl.h] [limits.h] [malloc.h] [netdb.h] [netinet/in.h] [stddef.h] [sys/param.h] [sys/socket.h] [utime.h])
+AC_CHECK_HEADER_STDBOOL
+AC_CHECK_TYPES([ptrdiff_t])
+AC_C_INLINE
+AC_TYPE_OFF_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+dnl End of stuff added at autoscan's suggestion
 
 X_TYPE_SOCKLEN_T
 X_TYPE_IN_PORT_T
