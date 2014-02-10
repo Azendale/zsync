@@ -437,7 +437,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> seedfiles;
     std::string filename;
     long long local_used;
-    char *zfname = NULL;
+    std::string zfname;
     time_t mtime;
 
     srand(getpid());
@@ -464,8 +464,7 @@ int main(int argc, char **argv) {
                 }
                 break;
             case 'k':
-                free(zfname);
-                zfname = strdup(optarg);
+                zfname = optarg;
                 break;
             case 'o':
                 filename = optarg;
@@ -488,6 +487,7 @@ int main(int argc, char **argv) {
             }
         }
     }
+    
 
     /* Last and only non-option parameter must be the path/URL of the .zsync */
     if (optind == argc) {
@@ -512,8 +512,12 @@ int main(int argc, char **argv) {
     }
 
     /* STEP 1: Read the zsync control file */
-    if ((zs = read_zsync_control_file(argv[optind], zfname)) == NULL)
+    const char * zfname_cstr = zfname.c_str();
+    if ((zs = read_zsync_control_file(argv[optind], zfname_cstr)) == NULL) {
+        delete [] zfname_cstr;
         exit(1);
+    }
+    delete [] zfname_cstr;
 
     /* Get eventual filename for output, and filename to write to while working */
     if (filename.empty())
