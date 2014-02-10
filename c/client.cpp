@@ -253,7 +253,7 @@ char *get_filename(const struct zsync_state *zs, const char *source_name) {
 
 /* prog = calc_zsync_progress(zs)
  * Returns the progress ratio 0..1 (none...done) for the given zsync_state */
-extern "C" float calc_zsync_progress(const struct zsync_state *zs) {
+float calc_zsync_progress(const struct zsync_state *zs) {
     long long zgot, ztot;
 
     zsync_progress(zs, &zgot, &ztot);
