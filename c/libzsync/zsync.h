@@ -153,21 +153,20 @@ public:
  */
 	ZsyncReceiver(class ZsyncState *zs_in, int url_type);
 	void zsync_begin_receive(class ZsyncState *zs_in, int url_type);
-// replaced by destructor
-//void zsync_end_receive();
 
 /* Supply data buf of length len received corresponding to offset offset from the URL.
  * Returns 0 for success; if not, you should not submit more data. */
 	int zsync_receive_data(const unsigned char* buf, off_t offset, size_t len);
-
-    //struct zsync_state *zs;
-    ZsyncState * zs;            /* The zsync_state that we are downloading for */
-    struct z_stream_s strm;     /* Decompression object */
-    int url_type;               /* Compressed or not */
-    unsigned char *outbuf;      /* Working buffer to keep incomplete blocks of data */
-    off_t outoffset;            /* and the position in that buffer */
-    ~ZsyncReceiver();           /* Destrutor, now that we dynamically allocate memory */
+	
+// replaced by destructor
+//void zsync_end_receive();
+	~ZsyncReceiver();           /* Destrutor, now that we dynamically allocate memory */
 private:
+	ZsyncState * zs;            /* The zsync_state that we are downloading for */
+	struct z_stream_s strm;     /* Decompression object */
+	int url_type;               /* Compressed or not */
+	unsigned char *outbuf;      /* Working buffer to keep incomplete blocks of data */
+	off_t outoffset;            /* and the position in that buffer */
 	int zsync_receive_data_compressed(const unsigned char *buf, off_t offset, size_t len);
 	int zsync_receive_data_uncompressed(const unsigned char *buf, off_t offset, size_t len);
 };
