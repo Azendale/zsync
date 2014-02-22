@@ -90,10 +90,14 @@ public:
  * target file. 
  */
 	int fetch_remaining_blocks();
-
-	struct zsync_state;
+/* filename_str = get_filename(zs, source_filename_str)
+ * Returns a (malloced string with a) suitable filename for a zsync download,
+ * using the given zsync state and source filename strings as hints. */
+	std::string ZsyncClient::get_filename(const char *source_name);
 
 private:
+	ZsyncState * zs;
+	ZsyncReciever * zr;
 };
 
 
@@ -142,7 +146,7 @@ FILE* open_zcat_pipe(const char* fname)
  */
 void ZsyncClient::read_seed_file(const char *fname) {
     /* If we should decompress this file */
-    if (zsync_hint_decompress(&(this->zsync_state)) && strlen(fname) > 3  && !strcmp(fname + strlen(fname) - 3, ".gz")) {
+    if (zs.zsync_hint_decompress() && strlen(fname) > 3  && !strcmp(fname + strlen(fname) - 3, ".gz")) {
         /* Open for reading */
         FILE *f = open_zcat_pipe(fname);
         if (!f) {
@@ -153,7 +157,7 @@ void ZsyncClient::read_seed_file(const char *fname) {
 
             /* Give the contents to libzsync to read and find any useful
              * content */
-            zsync_submit_source_file(&zsync_state, f, !no_progress);
+            zs->zsync_submit_source_file(f, !no_progress);
 
             /* Close and check for errors */
             if (pclose(f) != 0) {
@@ -174,7 +178,7 @@ void ZsyncClient::read_seed_file(const char *fname) {
              * is part of the target file. */
             if (!no_progress)
                 fprintf(stderr, "reading seed file %s: ", fname);
-            zsync_submit_source_file(zsync_state, f, !no_progress);
+            zs->zsync_submit_source_file(f, !no_progress);
 
             /* And close */
             if (fclose(f) != 0) {
@@ -186,7 +190,7 @@ void ZsyncClient::read_seed_file(const char *fname) {
     {   /* And print how far we've progressed towards the target file */
         long long done, total;
 
-        zsync_progress(zsync_state, &done, &total);
+        zs->zsync_progress(&done, &total);
         if (!no_progress)
             fprintf(stderr, "\rRead %s. Target %02.1f%% complete.      \n",
                     fname, (100.0f * done) / total);
@@ -226,11 +230,14 @@ void ZsyncClient::read_zsync_control_file(const char *p, const char *fn) {
         referer = lastpath;
     }
 
-    // TODO 2014-02-22
     /* Read the .zsync */
-    if ((*zsync_state = zsync_begin(f)) == NULL) {
+	zs = new ZsyncState(f);
+
+#if 0
+    if ((zs.zsync_begin(f)) == NULL) {
         exit(1);
     }
+#endif
 
     /* And close it */
     if (fclose(f) != 0) {
@@ -295,12 +302,13 @@ char *get_filename_prefix(const char *p) {
     return t;
 }
 
-// TODO: Include in ZsyncClient class
 /* filename_str = get_filename(zs, source_filename_str)
  * Returns a (malloced string with a) suitable filename for a zsync download,
  * using the given zsync state and source filename strings as hints. */
-std::string get_filename(const char *source_name) {
-    std::string p = zsync_filename(&zsync_state);
+std::string ZsyncClient::get_filename(const char *source_name) {
+	char * p_cstr = zs.zsync_filename();
+    std::string p = p_cstr;
+	free(p_cstr);
     std::string filename;
 
     if (!p.empty()) {
@@ -310,7 +318,9 @@ std::string get_filename(const char *source_name) {
                     source_name);
         }
         else {
-            std::string t = get_filename_prefix(source_name);
+			char * t_cstr = get_filename_prefix(source_name);
+            std::string t = t_cstr;
+			free(t_cstr);
 
             if (!t.empty() && t != p)
             {
@@ -339,7 +349,7 @@ std::string get_filename(const char *source_name) {
 float ZsyncClient::calc_zsync_progress() {
     long long zgot, ztot;
 
-    zsync_progress(&zsync_state, &zgot, &ztot);
+    zs.zsync_progress(&zgot, &ztot);
     return (100.0f * zgot / ztot);
 }
 
@@ -357,7 +367,6 @@ int ZsyncClient::fetch_remaining_blocks_http(const char *url, int type) {
     int ret = 0;
     struct range_fetch *rf;
     unsigned char *buf;
-    struct zsync_receiver *zr;
 
     /* URL might be relative - we need an absolute URL to do a fetch */
     char *u = make_url_absolute(referer, url);
@@ -374,7 +383,9 @@ int ZsyncClient::fetch_remaining_blocks_http(const char *url, int type) {
         free(u);
         return -1;
     }
-    zr = zsync_begin_receive(&zsync_state, type);
+    
+    // Constructs a ZsyncReciever object
+    zr = zsync_begin_receive(&zs, type);
     if (!zr) {
         range_fetch_end(rf);
         free(u);
@@ -713,8 +724,9 @@ int main(int argc, char **argv) {
      * down the zsync_state as we are done on the file transfer. Getting the
      * current name of the file at the same time. */
     mtime = zsync_mtime(zs);
-	// TODO: should be changed to zs.zsync_cur_filename() followed by delete zs;.
-    temp_file = zsync_end(zs);
+	// TODO: should be changed to zs->zsync_cur_filename() followed by delete zs;.
+    temp_file = zs->zsync_cur_filename();
+	delete zs;
 
     /* STEP 5: Move completed .part file into place as the final target */
     if (!filename.empty()) {
