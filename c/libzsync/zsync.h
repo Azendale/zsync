@@ -13,12 +13,44 @@
  *   COPYING file for details.
  */
 
-struct zsync_state;
+//struct zsync_state;
+
+class ZsyncState
+{
+public:
+    struct rcksum_state *rs;    /* rsync algorithm state, with block checksums and
+                                 * holding the in-progress local version of the target */
+    off_t filelen;              /* Length of the target file */
+    int blocks;                 /* Number of blocks in the target */
+    size_t blocksize;           /* Blocksize */
+
+    /* Checksum of the entire file, and checksum alg */
+    char *checksum;
+    const char *checksum_method;
+
+    /* URLs to uncompressed versions of the target */
+    char **url;
+    int nurl;
+
+    /* URLs to compressed versions of the target, and the zmap of that compressed version */
+    struct zmap *zmap;
+    char **zurl;
+    int nzurl;
+
+    char *cur_filename;         /* If we have taken the filename from rcksum, it is here */
+
+    /* Hints for the output file, from the .zsync */
+    char *filename;             /* The Filename: header */
+    char *zfilename;            /* ditto Z-Filename: */
+
+    char *gzopts;               /* If we're recompressing the download afterwards, these are the options to gzip(1) */
+    char *gzhead;               /* And this is the header of the gzip file (for the mtime) */
+
+    time_t mtime;               /* MTime: from the .zsync, or -1 */
 
 /* zsync_begin - load a zsync file and return data structure to use for the rest of the process.
  */
-struct zsync_state* zsync_begin(FILE* cf);
-
+void zsync_begin(FILE* cf);
 /* zsync_hint_decompress - if it returns non-zero, this suggests that 
  *  compressed seed files should be decompressed */
 int zsync_hint_decompress(const struct zsync_state*);
@@ -76,9 +108,16 @@ int zsync_complete(struct zsync_state* zs);
  * Returns a strdup()d pointer to the name of the file resulting from the process. */
 char* zsync_end(struct zsync_state* zs);
 
-/* And functions for receiving data on the network */
-struct zsync_receiver;
+private:
+};
 
+
+
+/* And functions for receiving data on the network */
+//struct zsync_receiver;
+class ZsyncReceiver
+{
+public:
 /* Begin and end receiving from a particular URL.
  * Note that the zsync_receiver stores a reference to the zsync_state, 
  *  and libzsync does not do reference counting, so it is the caller's 
@@ -86,10 +125,23 @@ struct zsync_receiver;
  *  first.
  * The url_type is as in the value returned by zsync_get_url.
  */
-struct zsync_receiver* zsync_begin_receive(struct zsync_state*zs, int url_type);
-void zsync_end_receive(struct zsync_receiver* zr);
+void zsync_begin_receive(struct zsync_state*zs, int url_type);
+void zsync_end_receive();
 
 /* Supply data buf of length len received corresponding to offset offset from the URL.
  * Returns 0 for success; if not, you should not submit more data. */
-int zsync_receive_data(struct zsync_receiver* zr, const unsigned char* buf, off_t offset, size_t len);
+int zsync_receive_data(const unsigned char* buf, off_t offset, size_t len);
+
+    //struct zsync_state *zs;
+    ZsyncState * zs;            /* The zsync_state that we are downloading for */
+    struct z_stream_s strm;     /* Decompression object */
+    int url_type;               /* Compressed or not */
+    unsigned char *outbuf;      /* Working buffer to keep incomplete blocks of data */
+    off_t outoffset;            /* and the position in that buffer */
+    ~ZsyncReceiver();           /* Destrutor, now that we dynamically allocate memory */
+private:
+int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t offset, size_t len);
+int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf, off_t offset, size_t len);
+};
+
 

@@ -91,9 +91,9 @@ public:
  */
 	int fetch_remaining_blocks();
 
+	struct zsync_state;
 
 private:
-	struct zsync_state;
 };
 
 
@@ -140,10 +140,9 @@ FILE* open_zcat_pipe(const char* fname)
  * is written to the in-progress target. So use this function to supply local
  * source files which are believed to have data in common with the target.
  */
-void read_seed_file(struct zsync_state *z, const char *fname) {
+void ZsyncClient::read_seed_file(const char *fname) {
     /* If we should decompress this file */
-    if (zsync_hint_decompress(z) && strlen(fname) > 3
-        && !strcmp(fname + strlen(fname) - 3, ".gz")) {
+    if (zsync_hint_decompress(&(this->zsync_state)) && strlen(fname) > 3  && !strcmp(fname + strlen(fname) - 3, ".gz")) {
         /* Open for reading */
         FILE *f = open_zcat_pipe(fname);
         if (!f) {
@@ -154,7 +153,7 @@ void read_seed_file(struct zsync_state *z, const char *fname) {
 
             /* Give the contents to libzsync to read and find any useful
              * content */
-            zsync_submit_source_file(z, f, !no_progress);
+            zsync_submit_source_file(&zsync_state, f, !no_progress);
 
             /* Close and check for errors */
             if (pclose(f) != 0) {
@@ -175,7 +174,7 @@ void read_seed_file(struct zsync_state *z, const char *fname) {
              * is part of the target file. */
             if (!no_progress)
                 fprintf(stderr, "reading seed file %s: ", fname);
-            zsync_submit_source_file(z, f, !no_progress);
+            zsync_submit_source_file(zsync_state, f, !no_progress);
 
             /* And close */
             if (fclose(f) != 0) {
@@ -187,7 +186,7 @@ void read_seed_file(struct zsync_state *z, const char *fname) {
     {   /* And print how far we've progressed towards the target file */
         long long done, total;
 
-        zsync_progress(z, &done, &total);
+        zsync_progress(zsync_state, &done, &total);
         if (!no_progress)
             fprintf(stderr, "\rRead %s. Target %02.1f%% complete.      \n",
                     fname, (100.0f * done) / total);
@@ -205,9 +204,8 @@ long long http_down;
  * .zsync _if it is retrieved from a URL_; can be NULL in which case no local
  * copy is made.
  */
-struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
+void ZsyncClient::read_zsync_control_file(const char *p, const char *fn) {
     FILE *f;
-    struct zsync_state *zs;
     char *lastpath = NULL;
 
     /* Try opening as a local path */
@@ -228,8 +226,9 @@ struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
         referer = lastpath;
     }
 
+    // TODO 2014-02-22
     /* Read the .zsync */
-    if ((zs = zsync_begin(f)) == NULL) {
+    if ((*zsync_state = zsync_begin(f)) == NULL) {
         exit(1);
     }
 
@@ -238,7 +237,6 @@ struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
         perror("fclose");
         exit(2);
     }
-    return zs;
 }
 
 /* str = get_filename_prefix(path_str)
@@ -301,8 +299,8 @@ char *get_filename_prefix(const char *p) {
 /* filename_str = get_filename(zs, source_filename_str)
  * Returns a (malloced string with a) suitable filename for a zsync download,
  * using the given zsync state and source filename strings as hints. */
-std::string get_filename(const struct zsync_state *zs, const char *source_name) {
-    std::string p = zsync_filename(zs);
+std::string get_filename(const char *source_name) {
+    std::string p = zsync_filename(&zsync_state);
     std::string filename;
 
     if (!p.empty()) {
@@ -338,10 +336,10 @@ std::string get_filename(const struct zsync_state *zs, const char *source_name) 
 // TODO: include in ZsyncClient class
 /* prog = calc_zsync_progress(zs)
  * Returns the progress ratio 0..1 (none...done) for the given zsync_state */
-float calc_zsync_progress(const struct zsync_state *zs) {
+float ZsyncClient::calc_zsync_progress() {
     long long zgot, ztot;
 
-    zsync_progress(zs, &zgot, &ztot);
+    zsync_progress(&zsync_state, &zgot, &ztot);
     return (100.0f * zgot / ztot);
 }
 
@@ -355,8 +353,7 @@ float calc_zsync_progress(const struct zsync_state *zs) {
  */
 #define BUFFERSIZE 8192
 
-int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
-                                int type) {
+int ZsyncClient::fetch_remaining_blocks_http(const char *url, int type) {
     int ret = 0;
     struct range_fetch *rf;
     unsigned char *buf;
@@ -377,7 +374,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
         free(u);
         return -1;
     }
-    zr = zsync_begin_receive(z, type);
+    zr = zsync_begin_receive(&zsync_state, type);
     if (!zr) {
         range_fetch_end(rf);
         free(u);
@@ -398,7 +395,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
 
     {   /* Get a set of byte ranges that we need to complete the target */
         int nrange;
-        off_t *zbyterange = zsync_needed_byte_ranges(z, &nrange, type);
+        off_t *zbyterange = zsync_needed_byte_ranges(&zsync_state, &nrange, type);
         if (!zbyterange)
             return 1;
         if (nrange == 0)
@@ -417,7 +414,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
         /* Set up progress display to run during the fetch */
         if (!no_progress) {
             fputc('\n', stderr);
-            do_progress(&p, calc_zsync_progress(z), range_fetch_bytes_down(rf));
+            do_progress(&p, calc_zsync_progress(zsync_state), range_fetch_bytes_down(rf));
         }
 
         /* Loop while we're receiving data, until we're done or there is an error */
@@ -430,7 +427,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
 
             /* Maintain progress display */
             if (!no_progress)
-                do_progress(&p, calc_zsync_progress(z),
+                do_progress(&p, calc_zsync_progress(zsync_state),
                             range_fetch_bytes_down(rf));
 
             // Needed in case next call returns len=0 and we need to signal where the EOF was.
@@ -462,9 +459,9 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
  * Using the URLs in the supplied zsync state, downloads data to complete the
  * target file. 
  */
-int fetch_remaining_blocks(struct zsync_state *zs) {
+int fetch_remaining_blocks() {
     int n, utype;
-    const char *const *url = zsync_get_urls(zs, &n, &utype);
+    const char *const *url = zsync_get_urls(&zsync_state, &n, &utype);
     int *status;        /* keep status for each URL - 0 means no error */
     int ok_urls = n;
 
@@ -475,7 +472,7 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
     status = (int *)calloc(n, sizeof *status);
 
     /* Keep going until we're done or have no useful URLs left */
-    while (zsync_status(zs) < 2 && ok_urls) {
+    while (zsync_status(&zsync_state) < 2 && ok_urls) {
         /* Still need data; pick a URL to use. */
         int thisTry = rand() % n;
 
@@ -483,7 +480,7 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
             const char *tryurl = url[thisTry];
 
             /* Try fetching data from this URL */
-            int rc = fetch_remaining_blocks_http(zs, tryurl, utype);
+            int rc = fetch_remaining_blocks_http(zsync_state, tryurl, utype);
             if (rc != 0) {
                 fprintf(stderr, "failed to retrieve from %s\n", tryurl);
                 status[thisTry] = 1;

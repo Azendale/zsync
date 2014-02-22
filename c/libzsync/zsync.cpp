@@ -127,7 +127,7 @@ static time_t parse_822(const char* ts);
 static char **append_ptrlist(int *n, char **p, char *a) {
     if (!a)
         return p;
-    p = realloc(p, (*n + 1) * sizeof *p);
+    p = (char ** )realloc(p, (*n + 1) * sizeof *p);
     if (!p) {
         fprintf(stderr, "out of memory\n");
         exit(1);
@@ -151,7 +151,7 @@ struct zsync_state *zsync_begin(FILE * f) {
     char *safelines = NULL;
 
     /* Allocate memory for the object */
-    struct zsync_state *zs = calloc(sizeof *zs, 1);
+    struct zsync_state *zs = (zsync_state*)calloc(sizeof *zs, 1);
 
     if (!zs)
         return NULL;
@@ -238,7 +238,7 @@ struct zsync_state *zsync_begin(FILE * f) {
                     return NULL;
                 }
 
-                zblock = malloc(nzblocks * sizeof *zblock);
+                zblock = (gzblock *)malloc(nzblocks * sizeof *zblock);
                 if (zblock) {
                     if (fread(zblock, sizeof *zblock, nzblocks, f) < nzblocks) {
                         fprintf(stderr, "premature EOF after Z-Map\n");
@@ -466,7 +466,7 @@ off_t *zsync_needed_byte_ranges(struct zsync_state * zs, int *num, int type) {
         return NULL;
 
     /* Allocate space for byte ranges */
-    byterange = malloc(2 * nrange * sizeof *byterange);
+    byterange = (off_t*)malloc(2 * nrange * sizeof *byterange);
     if (!byterange) {
         free(blrange);
         return NULL;
@@ -643,6 +643,7 @@ static int zsync_sha1(struct zsync_state *zs, int fh) {
  * original).
  *
  * Returns 0 on success, -1 on error (which is reported on stderr). */
+// TODO: static in c ~ == private method
 static int zsync_recompress(struct zsync_state *zs) {
     /* Recompression. This is a fugly mess, calling gzip on the temporary file with options
      *  read out of the .zsync, reading its output and replacing the gzip header. Ugh. */
@@ -820,61 +821,61 @@ struct zsync_receiver {
 };
 
 /* Constructor */
-struct zsync_receiver *zsync_begin_receive(struct zsync_state *zs, int url_type) {
-    struct zsync_receiver *zr = malloc(sizeof(struct zsync_receiver));
+// TODO: should also put as ZsyncReceiver::ZsyncReceiver(int url_type);
+void ZsyncReceiver::zsync_begin_receive(class ZsyncState *zs_in, int url_type) {
+    // I think this is safe to comment, because it was previously probably going to just be for returning the initialized object. Since were C++ing, then we don't need that
+    //struct zsync_receiver *zr = (zsync_receiver*)(sizeof(struct zsync_receiver));
 
-    if (!zr)
-        return NULL;
-    zr->zs = zs;
+    // save the pointer to the ZsyncState we are working on/for
+    zs = zs_in;
 
-    zr->outbuf = malloc(zs->blocksize);
-    if (!zr->outbuf) {
-        free(zr);
-        return NULL;
-    }
+	// Create a buffer the size of the ZsyncState object's blocksize
+    outbuf = new unsigned char [zs->blocksize];
 
     /* Set up new inflate object */
-    zr->strm.zalloc = Z_NULL;
-    zr->strm.zfree = Z_NULL;
-    zr->strm.opaque = NULL;
-    zr->strm.total_in = 0;
+	// strm is a data member of ZsyncReceiver
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = NULL;
+    strm.total_in = 0;
 
-    zr->url_type = url_type;
-    zr->outoffset = 0;
-
-    return zr;
+	// Both data members of the class
+    url_type = url_type;
+    outoffset = 0;
 }
+
+
 
 /* zsync_receive_data_uncompressed(self, buf[], offset, buflen)
  * Adds the data in buf (buflen bytes) to this file at the given offset.
  * Returns 0 unless there's an error (e.g. the submitted data doesn't match the
  * expected checksum for the corresponding blocks)
  */
-static int zsync_receive_data_uncompressed(struct zsync_receiver *zr,
-                                           const unsigned char *buf,
-                                           off_t offset, size_t len) {
+int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf,
+                                                          off_t offset, size_t len) {
     int ret = 0;
-    size_t blocksize = zr->zs->blocksize;
+	// _l name used to differentiate from blocksize, which is a data member of ZsyncReceiver
+    size_t blocksize_l = zs->blocksize;
 
-    if (0 != (offset % blocksize)) {
+    if (0 != (offset % blocksize_l)) {
         size_t x = len;
 
-        if (x > blocksize - (offset % blocksize))
-            x = blocksize - (offset % blocksize);
+        if (x > blocksize_l - (offset % blocksize_l))
+            x = blocksize_l - (offset % blocksize_l);
 
-        if (zr->outoffset == offset) {
+        if (outoffset == offset) {
             /* Half-way through a block, so let's try and complete it */
             if (len)
-                memcpy(zr->outbuf + offset % blocksize, buf, x);
+                memcpy(outbuf + offset % blocksize_l, buf, x);
             else {
                 // Pad with 0s to length.
-                memset(zr->outbuf + offset % blocksize, 0, len = x =
-                       blocksize - (offset % blocksize));
+                memset(outbuf + offset % blocksize_l, 0, len = x =
+                       blocksize_l - (offset % blocksize_l));
             }
 
-            if ((x + offset) % blocksize == 0)
+            if ((x + offset) % blocksize_l == 0)
                 if (zsync_submit_data
-                    (zr->zs, zr->outbuf, zr->outoffset + x - blocksize, 1))
+                    (zs, outbuf, outoffset + x - blocksize_l, 1))
                     ret = 1;
         }
         buf += x;
@@ -883,13 +884,13 @@ static int zsync_receive_data_uncompressed(struct zsync_receiver *zr,
     }
 
     /* Now we are block-aligned */
-    if (len >= blocksize) {
-        int w = len / blocksize;
+    if (len >= blocksize_l) {
+        int w = len / blocksize_l;
 
-        if (zsync_submit_data(zr->zs, buf, offset, w))
+        if (zsync_submit_data(zs, buf, offset, w))
             ret = 1;
 
-        w *= blocksize;
+        w *= blocksize_l;
         buf += w;
         len -= w;
         offset += w;
@@ -897,11 +898,11 @@ static int zsync_receive_data_uncompressed(struct zsync_receiver *zr,
     }
     /* Store incomplete block */
     if (len) {
-        memcpy(zr->outbuf, buf, len);
+        memcpy(outbuf, buf, len);
         offset += len;          /* not needed: buf += len; len -= len; */
     }
 
-    zr->outoffset = offset;
+    outoffset = offset;
     return ret;
 }
 
@@ -911,72 +912,78 @@ static int zsync_receive_data_uncompressed(struct zsync_receiver *zr,
  * Returns 0 unless there's an error (e.g. the submitted data doesn't match the
  * expected checksum for the corresponding blocks)
  */
-static int zsync_receive_data_compressed(struct zsync_receiver *zr,
-                              const unsigned char *buf, off_t offset,
-                              size_t len) {
+int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t offset,
+                                                        size_t len) {
     int ret = 0;
     int eoz = 0;
-    size_t blocksize = zr->zs->blocksize;
+    
+    // zs is a data member of the ZsyncReceiver class, that points to the ZsyncState object we are working on/for
+	// _l name is to indicate local to this function as the ZsyncReceiver also has something named the same
+    size_t blocksize_l = zs->blocksize;
 
-    if (!len)
+    if (len == 0)
         return 0;
 
     /* Now set up for the downloaded block */
-    zr->strm.next_in = buf;
-    zr->strm.avail_in = len;
+    // TODO: Come back to this, cast just what the compiler suggested, no nessesarily what it should be
+    strm.next_in = (Bytef*)buf;
+    strm.avail_in = len;
 
-    if (zr->strm.total_in == 0 || offset != zr->strm.total_in) {
-        zsync_configure_zstream_for_zdata(zr->zs, &(zr->strm), offset,
-                                          &(zr->outoffset));
+    // TODO: Come back to this, cast just what the compiler suggested, no nessesarily what it should be (long long int * cast)
+    if (strm.total_in == 0 || offset != strm.total_in) {
+        zsync_configure_zstream_for_zdata(zs, &(strm), offset,
+                                          (long long int *)&(outoffset));
 
         /* On first iteration, we might be reading an incomplete block from zsync's point of view. Limit avail_out so we can stop after doing that and realign with the buffer. */
-        zr->strm.avail_out = blocksize - (zr->outoffset % blocksize);
-        zr->strm.next_out = zr->outbuf;
+        strm.avail_out = blocksize_l - (outoffset % blocksize_l);
+        strm.next_out = outbuf;
     }
     else {
-        if (zr->outoffset == -1) {
+        if (outoffset == -1) {
             fprintf(stderr,
                     "data didn't align with block boundary in compressed stream\n");
             return 1;
         }
-        zr->strm.next_in = buf;
-        zr->strm.avail_in = len;
+        
+        //TODO: come back to this, cast is just what the compiler suggested, not nessesarily what it should be
+        strm.next_in = (Bytef*)buf;
+        strm.avail_in = len;
     }
 
-    while (zr->strm.avail_in && !eoz) {
+    while (strm.avail_in && !eoz) {
         int rc;
 
         /* Read in up to the next block (in the libzsync sense on the output stream) boundary */
 
-        rc = inflate(&(zr->strm), Z_SYNC_FLUSH);
+        rc = inflate(&(strm), Z_SYNC_FLUSH);
         switch (rc) {
         case Z_STREAM_END:
             eoz = 1;
         case Z_BUF_ERROR:
         case Z_OK:
-            if (zr->strm.avail_out == 0 || eoz) {
+            if (strm.avail_out == 0 || eoz) {
                 /* If this was at the start of a block, try submitting it */
-                if (!(zr->outoffset % blocksize)) {
+                if (!(outoffset % blocksize_l)) {
                     int rc;
 
-                    if (zr->strm.avail_out)
-                        memset(zr->strm.next_out, 0, zr->strm.avail_out);
-                    rc = zsync_submit_data(zr->zs, zr->outbuf,
-                                           zr->outoffset, 1);
-                    if (!zr->strm.avail_out)
+                    if (strm.avail_out)
+                        memset(strm.next_out, 0, strm.avail_out);
+                    rc = zsync_submit_data(zs, outbuf,
+                                           outoffset, 1);
+                    if (!strm.avail_out)
                         ret |= rc;
-                    zr->outoffset += blocksize;
+                    outoffset += blocksize_l;
                 }
                 else {
                     /* We were reading a block fragment; update outoffset, and we are now block-aligned. */
-                    zr->outoffset += (zr->strm.next_out - zr->outbuf);
+                    outoffset += (strm.next_out - outbuf);
                 }
-                zr->strm.avail_out = blocksize;
-                zr->strm.next_out = zr->outbuf;
+                strm.avail_out = blocksize_l;
+                strm.next_out = outbuf;
             }
             break;
         default:
-            fprintf(stderr, "zlib error: %s (%d)\n", zr->strm.msg, rc);
+            fprintf(stderr, "zlib error: %s (%d)\n", strm.msg, rc);
             eoz = 1;
             ret = -1;
             break;
@@ -991,21 +998,24 @@ static int zsync_receive_data_compressed(struct zsync_receiver *zr,
  * Returns 0 unless there's an error (e.g. the submitted data doesn't match the
  * expected checksum for the corresponding blocks)
  */
-int zsync_receive_data(struct zsync_receiver *zr, const unsigned char *buf,
-                       off_t offset, size_t len) {
-    if (zr->url_type == 1) {
-        return zsync_receive_data_compressed(zr, buf, offset, len);
+int ZsyncReceiver::zsync_receive_data(const unsigned char *buf,
+                                      off_t offset, size_t len) {
+    
+    // url_type is a data member of ZsyncReceiver, as is zsync_receive_data_*
+    if (url_type == 1) {
+        return zsync_receive_data_compressed(buf, offset, len);
     }
     else {
-        return zsync_receive_data_uncompressed(zr, buf, offset, len);
+        return zsync_receive_data_uncompressed(buf, offset, len);
     }
 }
 
-/* Destructor */
-void zsync_end_receive(struct zsync_receiver *zr) {
-    if (zr->strm.total_in > 0) {
-        inflateEnd(&(zr->strm));
+ZsyncReceiver::~ZsyncReceiver()
+{
+	// strm is a data member of ZsyncReceiver
+    if (strm.total_in > 0) {
+        inflateEnd(&(strm));
     }
-    free(zr->outbuf);
-    free(zr);
+    // outbuf is a data member of ZsyncReceiver
+    delete [] outbuf;
 }
