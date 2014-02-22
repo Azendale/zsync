@@ -192,24 +192,54 @@ struct zsync_state *read_zsync_control_file(const char *p, const char *fn) {
  * filename in the given file path.
  */
 char *get_filename_prefix(const char *p) {
+    // Make our own copy of the string so we can edit it without destroying the original
     char *s = strdup(p);
+    
+    // Find the last slash in the path and point t to it
     char *t = strrchr(s, '/');
+    
+    // u will point at the first non alphanumeric character, which will probably be the dot before the extention
     char *u;
 
+    // If the pointer we got back from strrchr was not null, then ...
     if (t)
+    {
+        // ...change the / in that position to 0, and then increment the pointer to the cstring after it...
         *t++ = 0;
-    else
+    }
+    else // ...otherwise, ...
+    {
+        // ... make t point at the start of our duplicate of the string.
         t = s;
+    }
+    
+    // Start u out at the start of the t string, but then...
     u = t;
+    
+    // ... fast forward u until it no longer points at a alphanumeric character.
     while (isalnum(*u)) {
         u++;
     }
+    
+    // Then set that first non-alphanumeric character to 0, terminating the string t.
     *u = 0;
+
+    
+    // If t points at a non-empty cstring...
     if (*t > 0)
+    {
+        //... make a copy of it to return so that it is safe to delete our working copy of the string, ...
         t = strdup(t);
-    else
+	}
+    else // ... otherwise, ...
+    {
+        // make t a null pointer to return.
         t = NULL;
+    }
+    // (free our working copy)
     free(s);
+    
+    // And, finally return t.
     return t;
 }
 
