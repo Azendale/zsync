@@ -13,7 +13,13 @@
  *   COPYING file for details.
  */
 
+#ifndef ZMAP_H
+#define ZMAP_H
+
 #include "zsglobal.h"
+
+// For uint16_t etc
+#include <stdint.h>
 
 struct gzblock {
   uint16_t inbitoffset;
@@ -58,3 +64,5 @@ static inline const char* skip_zhead(const char* p)
     return q;
 }
 
+// END of ZMAP_H header gaurd
+#endif

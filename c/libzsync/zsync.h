@@ -13,7 +13,10 @@
  *   COPYING file for details.
  */
 
-//struct zsync_state;
+#ifndef ZSYNC_H
+#define ZSYNC_H
+
+#include "zlib/zlib.h"
 
 class ZsyncState
 {
@@ -171,4 +174,5 @@ private:
 	int zsync_receive_data_uncompressed(const unsigned char *buf, off_t offset, size_t len);
 };
 
-
+// End of ZSYNC_H header gaurd
+#endif
