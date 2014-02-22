@@ -243,44 +243,45 @@ char *get_filename_prefix(const char *p) {
     return t;
 }
 
+// TODO: Include in ZsyncClient class
 /* filename_str = get_filename(zs, source_filename_str)
  * Returns a (malloced string with a) suitable filename for a zsync download,
  * using the given zsync state and source filename strings as hints. */
-char *get_filename(const struct zsync_state *zs, const char *source_name) {
-    char *p = zsync_filename(zs);
-    char *filename = NULL;
+std::string get_filename(const struct zsync_state *zs, const char *source_name) {
+    std::string p = zsync_filename(zs);
+    std::string filename;
 
-    if (p) {
-        if (strchr(p, '/')) {
+    if (!p.empty()) {
+        if (p.find('/') != std::string::npos) {
             fprintf(stderr,
                     "Rejected filename specified in %s, contained path component.\n",
                     source_name);
-            free(p);
         }
         else {
-            char *t = get_filename_prefix(source_name);
+            std::string t = get_filename_prefix(source_name);
 
-            if (t && !memcmp(p, t, strlen(t)))
+            if (!t.empty() && t != p)
+            {
                 filename = p;
-            else
-                free(p);
+            }
 
-            if (t && !filename) {
+            if (!t.empty() && filename.empty()) {
                 fprintf(stderr,
                         "Rejected filename specified in %s - prefix %s differed from filename %s.\n",
-                        source_name, t, p);
+                        source_name, t.c_str(), p.c_str());
             }
-            free(t);
         }
     }
-    if (!filename) {
+    if (filename.empty()) {
         filename = get_filename_prefix(source_name);
-        if (!filename)
-            filename = strdup("zsync-download");
+        if (filename.empty())
+            filename = "zsync-download";
     }
     return filename;
 }
 
+
+// TODO: include in ZsyncClient class
 /* prog = calc_zsync_progress(zs)
  * Returns the progress ratio 0..1 (none...done) for the given zsync_state */
 float calc_zsync_progress(const struct zsync_state *zs) {
@@ -290,6 +291,8 @@ float calc_zsync_progress(const struct zsync_state *zs) {
     return (100.0f * zgot / ztot);
 }
 
+
+// TODO: Include in ZsyncClient class
 /* fetch_remaining_blocks_http(zs, url, type)
  * For the given zsync_state, using the given URL (which is a copy of the
  * actual content of the target file is type == 0, or a compressed copy of it
@@ -400,6 +403,7 @@ int fetch_remaining_blocks_http(struct zsync_state *z, const char *url,
     return ret;
 }
 
+// TODO: Include in ZsyncClient class
 /* fetch_remaining_blocks(zs)
  * Using the URLs in the supplied zsync state, downloads data to complete the
  * target file. 
@@ -437,12 +441,12 @@ int fetch_remaining_blocks(struct zsync_state *zs) {
     return 0;
 }
 
-int set_mtime(const char* filename, time_t mtime) {
+int set_mtime(std::string filename, time_t mtime) {
     struct stat s;
     struct utimbuf u;
 
     /* Get the access time, which I don't want to modify. */
-    if (stat(filename, &s) != 0) {
+    if (stat(filename.c_str(), &s) != 0) {
         perror("stat");
         return -1;
     }
@@ -450,7 +454,7 @@ int set_mtime(const char* filename, time_t mtime) {
     /* Set the modification time. */
     u.actime = s.st_atime;
     u.modtime = mtime;
-    if (utime(filename, &u) != 0) {
+    if (utime(filename.c_str(), &u) != 0) {
         perror("utime");
         return -1;
     }
@@ -542,8 +546,7 @@ int main(int argc, char **argv) {
     }
 
     /* STEP 1: Read the zsync control file */
-    const char * zfname_cstr = zfname.c_str();
-    if ((zs = read_zsync_control_file(argv[optind], zfname_cstr)) == NULL) {
+    if ((zs = read_zsync_control_file(argv[optind], zfname.c_str())) == NULL) {
         exit(1);
     }
 
@@ -552,7 +555,6 @@ int main(int argc, char **argv) {
         filename = get_filename(zs, argv[optind]);
     // filename is a std::string, so it will overload the + operator
     temp_file = filename + ".part";
-    const char * temp_file_cstr = temp_file.c_str();
     
     {   /* STEP 2: read available local data and fill in what we know in the
          *target file */
@@ -561,8 +563,7 @@ int main(int argc, char **argv) {
         /* If the target file already exists, we're probably updating that file
          * - so it's a seed file */
         // cstring for the access function until I know what it is and if it will take std::string
-        const char * filename_cstr = filename.c_str();
-        if (!access(filename_cstr, R_OK)) {
+        if (!access(filename.c_str(), R_OK)) {
             seedfiles.push_back(filename);
         }
         /* If the .part file exists, it's probably an interrupted earlier
@@ -572,7 +573,7 @@ int main(int argc, char **argv) {
          * treat it like any other local source of data. Use it now. */
         // cstring for the access function until I know what it is and if it will take std::string
         
-        if (!access(temp_file_cstr, R_OK)) {
+        if (!access(temp_file.c_str(), R_OK)) {
             seedfiles.push_back(temp_file);
         }
 
@@ -597,8 +598,7 @@ int main(int argc, char **argv) {
 
             /* And now, if not a duplicate, read it */
             if (!dup) {
-                const char * seedfile_i_cstr = seedfiles[i].c_str();
-                read_seed_file(zs, seedfile_i_cstr);
+                read_seed_file(zs, seedfiles[i].c_str());
             }
         }
         
@@ -622,7 +622,7 @@ int main(int argc, char **argv) {
      * in-progress run (which should be a superset of the old .part - unless
      * the content changed, in which case it still contains anything relevant
      * from the old .part). */
-    if (zsync_rename_file(zs, temp_file_cstr) != 0) {
+    if (zsync_rename_file(zs, temp_file.c_str()) != 0) {
         perror("rename");
         exit(1);
     }
@@ -631,7 +631,7 @@ int main(int argc, char **argv) {
     if (fetch_remaining_blocks(zs) != 0) {
         fprintf(stderr,
                 "failed to retrieve all remaining blocks - no valid download URLs remain. Incomplete transfer left in %s.\n(If this is the download filename with .part appended, zsync will automatically pick this up and reuse the data it has already done if you retry in this dir.)\n",
-                temp_file_cstr);
+                temp_file.c_str());
         exit(3);
     }
 
@@ -643,7 +643,7 @@ int main(int argc, char **argv) {
         r = zsync_complete(zs);
         switch (r) {
         case -1:
-            fprintf(stderr, "Aborting, download available in %s\n", temp_file_cstr);
+            fprintf(stderr, "Aborting, download available in %s\n", temp_file.c_str());
             exit(2);
         case 0:
             if (!no_progress)
@@ -661,52 +661,49 @@ int main(int argc, char **argv) {
      * down the zsync_state as we are done on the file transfer. Getting the
      * current name of the file at the same time. */
     mtime = zsync_mtime(zs);
-    temp_file_cstr = zsync_end(zs);
+    temp_file = zsync_end(zs);
 
     /* STEP 5: Move completed .part file into place as the final target */
     if (!filename.empty()) {
         std::string oldfile_backup;
-        const char * filename_cstr = filename.c_str();
         int ok = 1;
 
         oldfile_backup = filename;
         oldfile_backup += ".zs-old";
         
-        const char * oldfile_backup_cstr = oldfile_backup.c_str();
-
-        if (!access(filename_cstr, F_OK)) {
+        if (!access(filename.c_str(), F_OK)) {
             /* Backup the old file. */
             /* First, remove any previous backup. We don't care if this fails -
              * the link below will catch any failure */
-            unlink(oldfile_backup_cstr);
+            unlink(oldfile_backup.c_str());
 
             /* Try linking the filename to the backup file name, so we will 
                atomically replace the target file in the next step.
                If that fails due to EPERM, it is probably a filesystem that
                doesn't support hard-links - so try just renaming it to the
                backup filename. */
-            if (link(filename_cstr, oldfile_backup_cstr) != 0
-                && (errno != EPERM || rename(filename_cstr, oldfile_backup_cstr) != 0)) {
+            if (link(filename.c_str(), oldfile_backup.c_str()) != 0
+                && (errno != EPERM || rename(filename.c_str(), oldfile_backup.c_str()) != 0)) {
                 perror("linkname");
                 fprintf(stderr,
                         "Unable to back up old file %s - completed download left in %s\n",
-                        filename_cstr, temp_file_cstr);
+                        filename.c_str(), temp_file.c_str());
                 ok = 0;         /* Prevent overwrite of old file below */
             }
         }
         if (ok) {
             /* Rename the file to the desired name */
-            if (rename(temp_file_cstr, filename_cstr) == 0) {
+            if (rename(temp_file.c_str(), filename.c_str()) == 0) {
                 /* final, final thing - set the mtime on the file if we have one */
                 if (mtime != -1) {
-                    set_mtime(filename_cstr, mtime);
+                    set_mtime(filename, mtime);
                 }
             }
             else {
                 perror("rename");
                 fprintf(stderr,
                         "Unable to back up old file %s - completed download left in %s\n",
-                        filename_cstr, temp_file_cstr);
+                        filename.c_str(), temp_file.c_str());
             }
         }
         // std::string that is oldfile_backup will automatically be released when it goes out of scope.
@@ -715,7 +712,7 @@ int main(int argc, char **argv) {
     else {
         printf
             ("No filename specified for download - completed download left in %s\n",
-             temp_file_cstr);
+             temp_file.c_str());
     }
 
     /* Final stats and cleanup */
