@@ -50,21 +50,21 @@ public:
 /* zsync_begin - load a zsync file and return data structure to use for the rest of the process.
  */
 // TODO: this is the constructor
-void zsync_begin(FILE* cf);
+	void zsync_begin(FILE* cf);
 /* zsync_hint_decompress - if it returns non-zero, this suggests that 
  *  compressed seed files should be decompressed */
-int zsync_hint_decompress(const struct zsync_state*);
+	int zsync_hint_decompress();
 
 /* zsync_filename - return the suggested filename from the .zsync file */
-char* zsync_filename(const struct zsync_state*);
+	char* zsync_filename();
 /* zsync_mtime - return the suggested mtime from the .zsync file */
-time_t zsync_mtime(const struct zsync_state*);
+	time_t zsync_mtime();
 
 /* zsync_rename_file - renames the temporary file used by zsync to the given name.
  * You don't "own" the filename until you zsync_end, but you can use this to give zsync a more 
  * appropriate intermediate filename (in case the user ctrl-c's). 
  * This is purely a hint; zsync could ignore it. Returns 0 if successful. */
-int zsync_rename_file(struct zsync_state* zs, const char* f);
+	int zsync_rename_file(const char* f);
 
 /* zsync_status - returns the current state:
  * 0 - no relevant local data found yet.
@@ -73,15 +73,15 @@ int zsync_rename_file(struct zsync_state* zs, const char* f);
  *      of checksumming and file handle states)
  */
 
-int zsync_status(const struct zsync_state* zs);
+	int zsync_status();
 
 /* zsync_progress - returns bytes of the file known so far in *got,
  * and the total (roughly, the file length) in *total */
-void zsync_progress(const struct zsync_state* zs, long long* got, long long* total);
+	void zsync_progress(long long* got, long long* total);
 
 /* zsync_submit_source_file - submit local file data to zsync
  */
-int zsync_submit_source_file(struct zsync_state* zs, FILE* f, int progress);
+	int zsync_submit_source_file(FILE* f, int progress);
 
 /* zsync_get_url - returns a URL from which to get needed data.
  * Returns NULL on failure, or a array of pointers to URLs.
@@ -90,7 +90,7 @@ int zsync_submit_source_file(struct zsync_state* zs, FILE* f, int progress);
  * (the URL pointers are still referenced by the library, and are valid only until zsync_end).
  */
 
-const char * const * zsync_get_urls(struct zsync_state* zs, int* n, int* t);
+	const char * const * zsync_get_urls(int* n, int* t);
 
 /* zsync_needed_byte_ranges - get the byte ranges needed from a URL.
  * Returns the number of ranges in *num, and a malloc'd array (to be freed 
@@ -98,30 +98,42 @@ const char * const * zsync_get_urls(struct zsync_state* zs, int* n, int* t);
  * of byte ranges.
  */
 
-off_t* zsync_needed_byte_ranges(struct zsync_state* zs, int* num, int type);
+	off_t* zsync_needed_byte_ranges(int* num, int type);
 
 /* zsync_complete - set file length and verify checksum if available
  * Returns -1 for failure, 1 for success, 0 for unable to verify (e.g. no checksum in the .zsync) */
-int zsync_complete(struct zsync_state* zs);
+	int zsync_complete();
 
 /* Clean up and free all resources. The pointer is freed by this call.
  * Returns a strdup()d pointer to the name of the file resulting from the process. */
 // TODO: sounds like this should be the destructor
-char* zsync_end(struct zsync_state* zs);
+	char* zsync_end();
 
+/* zsync_submit_data(self, buf[], offset, blocks)
+ * Passes data retrieved from the remote copy of
+ * the target file to libzsync, to be written into our local copy. The data is
+ * the given number of blocks at the given offset (must be block-aligned), data
+ * in buf[].  */
+	int zsync_submit_data(const unsigned char *buf, off_t offset, int blocks);
+	
+/* zsync_configure_zstream_for_zdata(self, &z_stream_s, zoffset, &outoffset)
+ * Rewrites the state in the given zlib stream object to be ready to decompress
+ * data from the compressed version of this zsync stream at the given offset in
+ * the compressed file. Returns the offset in the uncompressed stream that this
+ * corresponds to in the 4th parameter. 
+ */
+	void zsync_configure_zstream_for_zdata(struct z_stream_s *zstrm, long zoffset, long long *poutoffset);
+
+/* zsync_blocksize(self)
+ * Returns the blocksize used by zsync on this target. */
+	int zsync_blocksize();
+	
+	char * zsync_cur_filename();/* Returns the current filname */
 private:
-	int zsync_read_blocksums(struct zsync_state *zs, FILE * f,
-                                int rsum_bytes, int checksum_bytes,
-                                int seq_matches);
-int zsync_sha1(struct zsync_state *zs, int fh);
-int zsync_recompress(struct zsync_state *zs);
-time_t parse_822(const char* ts);
-zsync_submit_data(struct zsync_state *zs,
-                             const unsigned char *buf, off_t offset,
-                             int blocks);
-
+	int zsync_read_blocksums(FILE * f, int rsum_bytes, int checksum_bytes, int seq_matches);
+	int zsync_sha1(int fh);
+	int zsync_recompress();
 };
-
 
 
 /* And functions for receiving data on the network */
@@ -143,7 +155,7 @@ public:
 
 /* Supply data buf of length len received corresponding to offset offset from the URL.
  * Returns 0 for success; if not, you should not submit more data. */
-int zsync_receive_data(const unsigned char* buf, off_t offset, size_t len);
+	int zsync_receive_data(const unsigned char* buf, off_t offset, size_t len);
 
     //struct zsync_state *zs;
     ZsyncState * zs;            /* The zsync_state that we are downloading for */
@@ -153,8 +165,8 @@ int zsync_receive_data(const unsigned char* buf, off_t offset, size_t len);
     off_t outoffset;            /* and the position in that buffer */
     ~ZsyncReceiver();           /* Destrutor, now that we dynamically allocate memory */
 private:
-int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t offset, size_t len);
-int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf, off_t offset, size_t len);
+	int zsync_receive_data_compressed(const unsigned char *buf, off_t offset, size_t len);
+	int zsync_receive_data_uncompressed(const unsigned char *buf, off_t offset, size_t len);
 };
 
 

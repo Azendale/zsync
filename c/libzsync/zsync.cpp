@@ -55,6 +55,10 @@
 #include "sha1.h"
 #include "zmap.h"
 
+#include <stdexcept>
+
+time_t parse_822(const char* ts);
+
 /* Probably we really want a table of compression methods here. But I've only
  * implemented SHA1 so this is it for now. */
 const char ckmeth_sha1[] = { "SHA-1" };
@@ -142,7 +146,7 @@ void ZsyncState::zsync_begin(FILE * f) {
             if (!strcmp(buf, "zsync")) {
                 if (!strcmp(p, "0.0.4")) {
                     fprintf(stderr, "This version of zsync is not compatible with zsync 0.0.4 streams.\n");
-					throw std::domain_error;
+					throw std::domain_error("zsync");
                 }
             }
             else if (!strcmp(buf, "Min-Version")) {
@@ -150,7 +154,7 @@ void ZsyncState::zsync_begin(FILE * f) {
                     fprintf(stderr,
                             "control file indicates that zsync-%s or better is required\n",
                             p);
-					throw std::domain_error;
+					throw std::domain_error("Min-Version");
                 }
             }
             else if (!strcmp(buf, "Length")) {
@@ -163,17 +167,19 @@ void ZsyncState::zsync_begin(FILE * f) {
                 zfilename = strdup(p);
             }
             else if (!strcmp(buf, "URL")) {
-                url = (char **)append_ptrlist(&(zs->nurl), zs->url, strdup(p));
+				// nurl, url members of the class
+                url = (char **)append_ptrlist(&(nurl), url, strdup(p));
             }
             else if (!strcmp(buf, "Z-URL")) {
-                zurl = (char **)append_ptrlist(&(zs->nzurl), zs->zurl, strdup(p));
+				//nzurl, zurl members of the class
+                zurl = (char **)append_ptrlist(&(nzurl), zurl, strdup(p));
             }
             else if (!strcmp(buf, "Blocksize")) {
 				// blocksize is a data member of ZsyncState
                 blocksize = atol(p);
                 if (blocksize < 0 || (blocksize & (blocksize - 1))) {
                     fprintf(stderr, "nonsensical blocksize %ld\n", blocksize);
-                    throw std::invalid_argument;
+                    throw std::invalid_argument("Blocksize");
                 }
             }
             else if (!strcmp(buf, "Hash-Lengths")) {
@@ -183,7 +189,7 @@ void ZsyncState::zsync_begin(FILE * f) {
                     || checksum_bytes < 3 || checksum_bytes > 16
                     || seq_matches > 2 || seq_matches < 1) {
                     fprintf(stderr, "nonsensical hash lengths line %s\n", p);
-                    throw std::invalid_argument;
+                    throw std::invalid_argument("Hash-Lengths");
                 }
             }
             // blocks is a ZsyncState data member
@@ -194,14 +200,14 @@ void ZsyncState::zsync_begin(FILE * f) {
                 nzblocks = atoi(p);
                 if (nzblocks < 0) {
                     fprintf(stderr, "bad Z-Map line\n");
-					throw std::invalid_argument;
+					throw std::invalid_argument("Z-Map");
                 }
 
                 zblock = (gzblock *)malloc(nzblocks * sizeof *zblock);
                 if (zblock) {
                     if (fread(zblock, sizeof *zblock, nzblocks, f) < nzblocks) {
                         fprintf(stderr, "premature EOF after Z-Map\n");
-					throw std::invalid_argument;
+					throw std::length_error("Z-Map");
                     }
 
                     // zmap is a data member of the class
@@ -254,7 +260,7 @@ void ZsyncState::zsync_begin(FILE * f) {
                 fprintf(stderr,
                         "unrecognised tag %s - you need a newer version of zsync.\n",
                         buf);
-					throw std::invalid_argument;
+					throw std::invalid_argument("MTime");
             }
             // filelen, blocksize, blocks all data members of the class
             if (filelen && blocksize)
@@ -262,15 +268,15 @@ void ZsyncState::zsync_begin(FILE * f) {
         }
         else {
             fprintf(stderr, "Bad line - not a zsync file? \"%s\"\n", buf);
-					throw std::invalid_argument;
+					throw std::invalid_argument("Unknown");
         }
     }
     if (!filelen || !blocksize) {
         fprintf(stderr, "Not a zsync file (looked for Blocksize and Length lines)\n");
-					throw std::invalid_argument;
+					throw std::invalid_argument("Blocks");
     }
-    if (zsync_read_blocksums(zs, f, rsum_bytes, checksum_bytes, seq_matches) != 0) {
-					throw std::invalid_argument;
+    if (zsync_read_blocksums(f, rsum_bytes, checksum_bytes, seq_matches) != 0) {
+					throw std::invalid_argument("Blocksums");
     }
 }
 
@@ -282,18 +288,20 @@ void ZsyncState::zsync_begin(FILE * f) {
  * checksums. 
  * rsum_bytes, checksum_bytes, seq_matches are settings for the checksums,
  * passed through to the rcksum_state. */
-int ZsyncState::zsync_read_blocksums(struct zsync_state *zs, FILE * f,
+int ZsyncState::zsync_read_blocksums(FILE * f,
                                 int rsum_bytes, int checksum_bytes,
                                 int seq_matches) {
     /* Make the rcksum_state first */
-    if (!(zs->rs = rcksum_init(zs->blocks, zs->blocksize, rsum_bytes,
+	// rs, blocks, blocksize are members of the class
+    if (!(rs = rcksum_init(blocks, blocksize, rsum_bytes,
                                checksum_bytes, seq_matches))) {
         return -1;
     }
 
     /* Now read in and store the checksums */
     zs_blockid id = 0;
-    for (; id < zs->blocks; id++) {
+	// blocks is a member of the class
+    for (; id < blocks; id++) {
         struct rsum r = { 0, 0 };
         unsigned char checksum[CHECKSUM_SIZE];
 
@@ -304,14 +312,16 @@ int ZsyncState::zsync_read_blocksums(struct zsync_state *zs, FILE * f,
             /* Error - free the rcksum_state and tell the caller to bail */
             fprintf(stderr, "short read on control file; %s\n",
                     strerror(ferror(f)));
-            rcksum_end(zs->rs);
+			// rs is a member of the class
+            rcksum_end(rs);
             return -1;
         }
 
         /* Convert to host endian and store */
         r.a = ntohs(r.a);
         r.b = ntohs(r.b);
-        rcksum_add_target_block(zs->rs, id, r, checksum);
+		// rs is a member of the class
+        rcksum_add_target_block(rs, id, r, checksum);
     }
     return 0;
 }
@@ -320,7 +330,7 @@ int ZsyncState::zsync_read_blocksums(struct zsync_state *zs, FILE * f,
  * Parse an RFC822 date string. Returns a time_t, or -1 on failure. 
  * E.g. Tue, 25 Jul 2006 20:02:17 +0000
  */
-time_t ZsyncState::parse_822(const char* ts) {
+time_t parse_822(const char* ts) {
     struct tm t;
 
     if (strptime(ts, "%a, %d %b %Y %H:%M:%S %z", &t) == NULL
@@ -333,29 +343,33 @@ time_t ZsyncState::parse_822(const char* ts) {
 /* zsync_hint_decompress(self)
  * Returns true if we think we'll be able to download compressed data to get
  * the needed data to complete the target file */
-int ZsyncState::zsync_hint_decompress(const struct zsync_state *zs) {
-    return (zs->nzurl > 0 ? 1 : 0);
+int ZsyncState::zsync_hint_decompress() {
+	// nzurl member of the class
+    return (nzurl > 0 ? 1 : 0);
 }
 
 /* zsync_blocksize(self)
  * Returns the blocksize used by zsync on this target. */
-int ZsyncState::zsync_blocksize(const struct zsync_state *zs) {
-    return zs->blocksize;
+int ZsyncState::zsync_blocksize() {
+	// definitely a getter function! :)
+    return blocksize;
 }
 
 /* char* = zsync_filename(self)
  * Returns the suggested filename to be used for the final result of this
  * zsync.  Malloced string to be freed by the caller. */
-char * ZsyncState::zsync_filename(const struct zsync_state *zs) {
-    return strdup(zs->gzhead && zs->zfilename ? zs->zfilename : zs->filename);
+char * ZsyncState::zsync_filename() {
+	// gzhead, zfilename, filename all members of the class
+    return strdup(gzhead && zfilename ? zfilename : filename);
 }
 
 /* time_t = zsync_mtime(self)
  * Returns the mtime on the original copy of the target; for the client program
  * to set the mtime of the local file to match, if it so chooses.
  * Or -1 if no mtime specified in the .zsync */
-time_t ZsyncState::zsync_mtime(const struct zsync_state *zs) {
-    return zs->mtime;
+time_t ZsyncState::zsync_mtime() {
+	// definitely a getter function! :)
+    return mtime;
 }
 
 /* zsync_status(self)
@@ -364,28 +378,34 @@ time_t ZsyncState::zsync_mtime(const struct zsync_state *zs) {
  *          2 or more if we have all.
  * The caller should not rely on exact values 2+; just test >= 2. Values >2 may
  * be used in later versions of libzsync. */
-int ZsyncState::zsync_status(const struct zsync_state *zs) {
-    int todo = rcksum_blocks_todo(zs->rs);
+int ZsyncState::zsync_status() {
+	// rs is a member of the class
+    int todo = rcksum_blocks_todo(rs);
 
-    if (todo == zs->blocks)
+	// blocks is a member of the class
+    if (todo == blocks)
+	{
         return 0;
+	}
     if (todo > 0)
+	{
         return 1;
+	}
     return 2;                   /* TODO: more? */
 }
 
 /* zsync_progress(self, &got, &total)
  * Writes the number of bytes got, and the total to get, into the long longs.
  */
-void ZsyncState::zsync_progress(const struct zsync_state *zs, long long *got,
-                    long long *total) {
+void ZsyncState::zsync_progress(long long *got, long long *total) {
 
     if (got) {
-        int todo = zs->blocks - rcksum_blocks_todo(zs->rs);
-        *got = todo * zs->blocksize;
+		// blocks, rs, blocksize are members of the class
+        int todo = blocks - rcksum_blocks_todo(rs);
+        *got = todo * blocksize;
     }
     if (total)
-        *total = zs->blocks * zs->blocksize;
+        *total = blocks * blocksize;
 }
 
 /* zsync_get_urls(self, &num, &type)
@@ -395,16 +415,17 @@ void ZsyncState::zsync_progress(const struct zsync_state *zs, long long *got,
  * Note that these URLs could be for encoded versions of the target; a 'type'
  * is returned in *type which tells libzsync in later calls what version of the
  * target is being retrieved. */
-const char *const * ZsyncState::zsync_get_urls(struct zsync_state *zs, int *n, int *t) {
-    if (zs->zmap && zs->nzurl) {
-        *n = zs->nzurl;
+const char *const * ZsyncState::zsync_get_urls(int *n, int *t) {
+	// zmap, nzurl are members of the class
+    if (zmap && nzurl) {
+        *n = nzurl;
         *t = 1;
-        return zs->zurl;
+        return zurl;
     }
     else {
-        *n = zs->nurl;
+        *n = nurl;
         *t = 0;
-        return zs->url;
+        return url;
     }
 }
 
@@ -414,13 +435,14 @@ const char *const * ZsyncState::zsync_get_urls(struct zsync_state *zs, int *n, i
  * a zsync_get_urls call), such that retrieving all these byte ranges would be
  * sufficient to obtain a complete copy of the target file.
  */
-off_t * ZsyncState::zsync_needed_byte_ranges(struct zsync_state * zs, int *num, int type) {
+off_t * ZsyncState::zsync_needed_byte_ranges(int *num, int type) {
     int nrange;
     off_t *byterange;
     int i;
 
     /* Request all needed block ranges */
-    zs_blockid *blrange = rcksum_needed_block_ranges(zs->rs, &nrange, 0, 0x7fffffff);
+	// rs is a member of the class
+    zs_blockid *blrange = rcksum_needed_block_ranges(rs, &nrange, 0, 0x7fffffff);
     if (!blrange)
         return NULL;
 
@@ -435,9 +457,11 @@ off_t * ZsyncState::zsync_needed_byte_ranges(struct zsync_state * zs, int *num, 
      * Note: Must cast one operand to off_t as both blocksize and blrange[x]
      * are int's whereas the product must be a file offfset. Needed so we don't
      * truncate file offsets to 32bits on 32bit platforms. */
+	// TODO: Could the aformentioned problem be avoided by using off_t's for both in the first place?
     for (i = 0; i < nrange; i++) {
-        byterange[2 * i] = blrange[2 * i] * (off_t)zs->blocksize;
-        byterange[2 * i + 1] = blrange[2 * i + 1] * (off_t)zs->blocksize - 1;
+		// blocksize is a member of the class
+        byterange[2 * i] = blrange[2 * i] * (off_t)blocksize;
+        byterange[2 * i + 1] = blrange[2 * i + 1] * (off_t)blocksize - 1;
     }
     free(blrange);      /* And release the blocks, we're done with them */
 
@@ -447,8 +471,9 @@ off_t * ZsyncState::zsync_needed_byte_ranges(struct zsync_state * zs, int *num, 
         return byterange;
     case 1:
         {   /* Convert ranges in the uncompressed data to ranges in the compressed data */
+			// zmap is a member of the class
             off_t *zbyterange =
-                zmap_to_compressed_ranges(zs->zmap, byterange, nrange, &nrange);
+                zmap_to_compressed_ranges(zmap, byterange, nrange, &nrange);
 
             /* Store the number of compressed ranges and return them, freeing
              * the uncompressed ones now we've used them. */
@@ -469,28 +494,33 @@ off_t * ZsyncState::zsync_needed_byte_ranges(struct zsync_state * zs, int *num, 
  * identify any blocks of data in common with the target file. Blocks found are
  * written to our local copy of the target in progress. Progress reports if
  * progress != 0  */
-int ZsyncState::zsync_submit_source_file(struct zsync_state *zs, FILE * f, int progress) {
-    return rcksum_submit_source_file(zs->rs, f, progress);
+int ZsyncState::zsync_submit_source_file(FILE * f, int progress) {
+	// rs is a member of the class
+    return rcksum_submit_source_file(rs, f, progress);
 }
 
-char * ZsyncState::zsync_cur_filename(struct zsync_state *zs) {
-    if (!zs->cur_filename)
-        zs->cur_filename = rcksum_filename(zs->rs);
+char * ZsyncState::zsync_cur_filename() {
+    if (!cur_filename)
+	{
+        cur_filename = rcksum_filename(rs);
+	}
 
-    return zs->cur_filename;
+    return cur_filename;
 }
 
 /* zsync_rename_file(self, filename)
  * Tell libzsync to move the local copy of the target (or under construction
  * target) to the given filename. */
-int ZsyncState::zsync_rename_file(struct zsync_state *zs, const char *f) {
-    char *rf = zsync_cur_filename(zs);
+int ZsyncState::zsync_rename_file(const char *f) {
+	// zsync_cur_filename is a member of the class
+    char *rf = zsync_cur_filename();
 
     int x = rename(rf, f);
 
     if (!x) {
         free(rf);
-        zs->cur_filename = strdup(f);
+		// cur_filename is a member of the class
+        cur_filename = strdup(f);
     }
     else
         perror("rename");
@@ -515,19 +545,22 @@ static int hexdigit(char c) {
  *          0 if successful but no checksum verified
  *          1 if successful including checksum verified
  */
-int ZsyncState::zsync_complete(struct zsync_state *zs) {
+int ZsyncState::zsync_complete() {
     int rc = 0;
 
     /* We've finished with the rsync algorithm. Take over the local copy from
      * librcksum and free our rcksum state. */
-    int fh = rcksum_filehandle(zs->rs);
-    zsync_cur_filename(zs);
-    rcksum_end(zs->rs);
-    zs->rs = NULL;
+	// rs, zsync_cur_filename are members of the class
+    int fh = rcksum_filehandle(rs);
+    zsync_cur_filename();
+	// Free the rs object.
+    rcksum_end(rs);
+    rs = NULL;
 
     /* Truncate the file to the exact length (to remove any trailing NULs from
      * the last block); return to the start of the file ready to verify. */
-    if (ftruncate(fh, zs->filelen) != 0) {
+	// filelen is a member of the class
+    if (ftruncate(fh, filelen) != 0) {
         perror("ftruncate");
         rc = -1;
     }
@@ -537,14 +570,16 @@ int ZsyncState::zsync_complete(struct zsync_state *zs) {
     }
 
     /* Do checksum check */
-    if (rc == 0 && zs->checksum && !strcmp(zs->checksum_method, ckmeth_sha1)) {
-        rc = zsync_sha1(zs, fh);
+	// checksum, checksum_method, zsync_sha1 are members of the class
+    if (rc == 0 && checksum && !strcmp(checksum_method, ckmeth_sha1)) {
+        rc = zsync_sha1(fh);
     }
     close(fh);
 
     /* Do any requested recompression */
-    if (rc >= 0 && zs->gzhead && zs->gzopts) {
-        if (zsync_recompress(zs) != 0) {
+	// gzhead, gzopts, and zsync_recompress are members of the class
+    if (rc >= 0 && gzhead && gzopts) {
+        if (zsync_recompress() != 0) {
             return -1;
         }
     }
@@ -556,7 +591,7 @@ int ZsyncState::zsync_complete(struct zsync_state *zs) {
  * target, read it and compare the SHA1 checksum with the one from the .zsync.
  * Returns -1 or 1 as per zsync_complete.
  */
-int ZsyncState::zsync_sha1(struct zsync_state *zs, int fh) {
+int ZsyncState::zsync_sha1(int fh) {
     SHA1_CTX shactx;
 
     {                           /* Do SHA1 of file contents */
@@ -581,7 +616,8 @@ int ZsyncState::zsync_sha1(struct zsync_state *zs, int fh) {
 
         for (i = 0; i < SHA1_DIGEST_LENGTH; i++) {
             int j;
-            sscanf(&(zs->checksum[2 * i]), "%2x", &j);
+			// checksum is a member of the ZsyncState class
+            sscanf(&(checksum[2 * i]), "%2x", &j);
             if (j != digest[i]) {
                 return -1;
             }
@@ -610,14 +646,16 @@ int ZsyncState::zsync_recompress() {
     int rc = 0;
 
     char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "gzip -n %s < ", zs->gzopts);
+	// gzopts is a member of the class
+    snprintf(cmd, sizeof(cmd), "gzip -n %s < ", gzopts);
 
     {   /* Add input filename, shell-escaped, to the command line */
         int i = 0;
         size_t j = strlen(cmd);
         char c;
 
-        while ((c = zs->cur_filename[i++]) != 0 && j < sizeof(cmd) - 2) {
+		// cur_filename is a member of the class
+        while ((c = cur_filename[i++]) != 0 && j < sizeof(cmd) - 2) {
             if (!isalnum(c))
                 cmd[j++] = '\\';
             cmd[j++] = c;
@@ -632,11 +670,13 @@ int ZsyncState::zsync_recompress() {
     if (g) {
         char zoname[1024];
 
-        snprintf(zoname, sizeof(zoname), "%s.gz", zs->cur_filename);
+		// cur_filename part of the class
+        snprintf(zoname, sizeof(zoname), "%s.gz", cur_filename);
         zout = fopen(zoname, "w");
 
         if (zout) {
-            char *p = zs->gzhead;
+			// gzhead part of the class
+            char *p = gzhead;
             int skip = 1;
 
             while (p[0] && p[1]) {
@@ -646,6 +686,10 @@ int ZsyncState::zsync_recompress() {
                 }
                 p += 2;
             }
+            
+            // could breaking from the loop, and setting a flag declared right after this comment
+            // and then putting a check of that flag at the leave_it marker get around a goto?
+            // (am I missing something?)
             while (!feof(g)) {
                 char buf[1024];
                 int r;
@@ -679,9 +723,10 @@ int ZsyncState::zsync_recompress() {
         }
 
         /* Free our old filename and replace with the new one */
-        unlink(zs->cur_filename);
-        free(zs->cur_filename);
-        zs->cur_filename = strdup(zoname);
+		// TODO: this could be way easier with std::string
+        unlink(cur_filename);
+        free(cur_filename);
+        cur_filename = strdup(zoname);
     }
     else {
         fprintf(stderr, "problem with gzip, unable to compress.\n");
@@ -693,7 +738,7 @@ int ZsyncState::zsync_recompress() {
 char * ZsyncState::zsync_end() {
     int i;
 	// TODO: Seems like this should be separated out of what is really the destrutor. This will allow the destructor to return nothing
-    char *f = zsync_cur_filename(zs);
+    char *f = zsync_cur_filename();
 
     /* Free rcksum object and zmap */
     if (rs)
@@ -725,9 +770,8 @@ char * ZsyncState::zsync_end() {
  * the compressed file. Returns the offset in the uncompressed stream that this
  * corresponds to in the 4th parameter. 
  */
-void ZsyncState::zsync_configure_zstream_for_zdata(const struct zsync_state *zs,
-                                       struct z_stream_s *zstrm,
-                                       long zoffset, long long *poutoffset) {
+void ZsyncState::zsync_configure_zstream_for_zdata(struct z_stream_s *zstrm,
+                                                   long zoffset, long long *poutoffset) {
 	// zmap is a data member of the class
     configure_zstream_for_zdata(zmap, zstrm, zoffset, poutoffset);
     {                           /* Load in prev 32k sliding window for backreferences */
@@ -844,8 +888,8 @@ int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf,
             }
 
             if ((x + offset) % blocksize_l == 0)
-                if (zsync_submit_data
-                    (zs, outbuf, outoffset + x - blocksize_l, 1))
+                if (zs->zsync_submit_data
+                    (outbuf, outoffset + x - blocksize_l, 1))
                     ret = 1;
         }
         buf += x;
@@ -857,7 +901,7 @@ int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf,
     if (len >= blocksize_l) {
         int w = len / blocksize_l;
 
-        if (zsync_submit_data(zs, buf, offset, w))
+        if (zs->zsync_submit_data(buf, offset, w))
             ret = 1;
 
         w *= blocksize_l;
@@ -901,7 +945,7 @@ int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t
 
     // TODO: Come back to this, cast just what the compiler suggested, no nessesarily what it should be (long long int * cast)
     if (strm.total_in == 0 || offset != strm.total_in) {
-        zsync_configure_zstream_for_zdata(zs, &(strm), offset,
+        zs->zsync_configure_zstream_for_zdata(&(strm), offset,
                                           (long long int *)&(outoffset));
 
         /* On first iteration, we might be reading an incomplete block from zsync's point of view. Limit avail_out so we can stop after doing that and realign with the buffer. */
@@ -938,7 +982,7 @@ int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t
 
                     if (strm.avail_out)
                         memset(strm.next_out, 0, strm.avail_out);
-                    rc = zsync_submit_data(zs, outbuf,
+                    rc = zs->zsync_submit_data(outbuf,
                                            outoffset, 1);
                     if (!strm.avail_out)
                         ret |= rc;
