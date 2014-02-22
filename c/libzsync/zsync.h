@@ -23,8 +23,7 @@ class ZsyncState
 public:
 /* zsync_begin - load a zsync file and return data structure to use for the rest of the process.
  */
-// TODO: this is the constructor
-	void zsync_begin(FILE* cf);
+	ZsyncState(FILE* cf);
 /* zsync_hint_decompress - if it returns non-zero, this suggests that 
  *  compressed seed files should be decompressed */
 	int zsync_hint_decompress();
@@ -78,10 +77,8 @@ public:
  * Returns -1 for failure, 1 for success, 0 for unable to verify (e.g. no checksum in the .zsync) */
 	int zsync_complete();
 
-/* Clean up and free all resources. The pointer is freed by this call.
- * Returns a strdup()d pointer to the name of the file resulting from the process. */
-// TODO: sounds like this should be the destructor
-	char* zsync_end();
+/* Clean up and free all resources.*/
+	~ZsyncState();
 
 /* zsync_submit_data(self, buf[], offset, blocks)
  * Passes data retrieved from the remote copy of

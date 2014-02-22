@@ -106,7 +106,7 @@ static char **append_ptrlist(int *n, char **p, char *a) {
 }
 
 /* Constructor */
-void ZsyncState::zsync_begin(FILE * f) {
+ZsyncState::ZsyncState(FILE * f) {
     /* Defaults for the checksum bytes and sequential matches properties of the
      * rcksum_state. These are the defaults from versions of zsync before these
      * were variable. */
@@ -740,10 +740,8 @@ int ZsyncState::zsync_recompress() {
 }
 
 /* Destructor */
-char * ZsyncState::zsync_end() {
+ZsyncState::~ZsyncState() {
     int i;
-	// TODO: Seems like this should be separated out of what is really the destrutor. This will allow the destructor to return nothing
-    char *f = zsync_cur_filename();
 
     /* Free rcksum object and zmap */
     if (rs)
@@ -763,7 +761,6 @@ char * ZsyncState::zsync_end() {
     free(checksum);
     free(filename);
     free(zfilename);
-    return f;
 }
 
 /* Next come the methods for accepting data received from the remote copies of
