@@ -528,6 +528,11 @@ int ZsyncState::zsync_rename_file(const char *f) {
     return x;
 }
 
+size_t ZsyncState::get_blocksize()
+{
+	return blocksize;
+}
+
 /* int hexdigit(char)
  * Maps a character to 0..15 as a hex digit (or 0 if not valid hex digit)
  */
@@ -825,7 +830,7 @@ void ZsyncReceiver::zsync_begin_receive(class ZsyncState *zs_in, int url_type) {
     zs = zs_in;
 
 	// Create a buffer the size of the ZsyncState object's blocksize
-    outbuf = new unsigned char [zs->blocksize];
+    outbuf = new unsigned char [zs->get_blocksize()];
 
     /* Set up new inflate object */
 	// strm is a data member of ZsyncReceiver
@@ -845,7 +850,7 @@ ZsyncReceiver::ZsyncReceiver(class ZsyncState *zs_in, int url_type) {
     zs = zs_in;
 
 	// Create a buffer the size of the ZsyncState object's blocksize
-    outbuf = new unsigned char [zs->blocksize];
+    outbuf = new unsigned char [zs->get_blocksize()];
 
     /* Set up new inflate object */
 	// strm is a data member of ZsyncReceiver
@@ -869,7 +874,7 @@ int ZsyncReceiver::zsync_receive_data_uncompressed(const unsigned char *buf,
                                                           off_t offset, size_t len) {
     int ret = 0;
 	// _l name used to differentiate from blocksize, which is a data member of ZsyncReceiver
-    size_t blocksize_l = zs->blocksize;
+    size_t blocksize_l = zs->get_blocksize();
 
     if (0 != (offset % blocksize_l)) {
         size_t x = len;
@@ -933,7 +938,7 @@ int ZsyncReceiver::zsync_receive_data_compressed(const unsigned char *buf, off_t
     
     // zs is a data member of the ZsyncReceiver class, that points to the ZsyncState object we are working on/for
 	// _l name is to indicate local to this function as the ZsyncReceiver also has something named the same
-    size_t blocksize_l = zs->blocksize;
+    size_t blocksize_l = zs->get_blocksize();
 
     if (len == 0)
         return 0;

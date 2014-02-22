@@ -18,35 +18,6 @@
 class ZsyncState
 {
 public:
-    struct rcksum_state *rs;    /* rsync algorithm state, with block checksums and
-                                 * holding the in-progress local version of the target */
-    off_t filelen;              /* Length of the target file */
-    int blocks;                 /* Number of blocks in the target */
-    size_t blocksize;           /* Blocksize */
-
-    /* Checksum of the entire file, and checksum alg */
-    char *checksum;
-    const char *checksum_method;
-
-    /* URLs to uncompressed versions of the target */
-    char **url;
-    int nurl;
-
-    /* URLs to compressed versions of the target, and the zmap of that compressed version */
-    struct zmap *zmap;
-    char **zurl;
-    int nzurl;
-
-    char *cur_filename;         /* If we have taken the filename from rcksum, it is here */
-
-    /* Hints for the output file, from the .zsync */
-    char *filename;             /* The Filename: header */
-    char *zfilename;            /* ditto Z-Filename: */
-
-    char *gzopts;               /* If we're recompressing the download afterwards, these are the options to gzip(1) */
-    char *gzhead;               /* And this is the header of the gzip file (for the mtime) */
-
-    time_t mtime;               /* MTime: from the .zsync, or -1 */
 /* zsync_begin - load a zsync file and return data structure to use for the rest of the process.
  */
 // TODO: this is the constructor
@@ -57,6 +28,7 @@ public:
 
 /* zsync_filename - return the suggested filename from the .zsync file */
 	char* zsync_filename();
+	
 /* zsync_mtime - return the suggested mtime from the .zsync file */
 	time_t zsync_mtime();
 
@@ -89,7 +61,6 @@ public:
  * and the url type (to pass to needed_byte_ranges & begin_receive)
  * (the URL pointers are still referenced by the library, and are valid only until zsync_end).
  */
-
 	const char * const * zsync_get_urls(int* n, int* t);
 
 /* zsync_needed_byte_ranges - get the byte ranges needed from a URL.
@@ -129,7 +100,39 @@ public:
 	int zsync_blocksize();
 	
 	char * zsync_cur_filename();/* Returns the current filname */
+	
+	size_t get_blocksize(); // Returns the blocksize
+	
 private:
+    struct rcksum_state *rs;    /* rsync algorithm state, with block checksums and
+                                 * holding the in-progress local version of the target */
+    off_t filelen;              /* Length of the target file */
+    int blocks;                 /* Number of blocks in the target */
+    size_t blocksize;           /* Blocksize */
+
+    /* Checksum of the entire file, and checksum alg */
+    char *checksum;
+    const char *checksum_method;
+
+    /* URLs to uncompressed versions of the target */
+    char **url;
+    int nurl;
+
+    /* URLs to compressed versions of the target, and the zmap of that compressed version */
+    struct zmap *zmap;
+    char **zurl;
+    int nzurl;
+
+    char *cur_filename;         /* If we have taken the filename from rcksum, it is here */
+
+    /* Hints for the output file, from the .zsync */
+    char *filename;             /* The Filename: header */
+    char *zfilename;            /* ditto Z-Filename: */
+
+    char *gzopts;               /* If we're recompressing the download afterwards, these are the options to gzip(1) */
+    char *gzhead;               /* And this is the header of the gzip file (for the mtime) */
+
+    time_t mtime;               /* MTime: from the .zsync, or -1 */
 	int zsync_read_blocksums(FILE * f, int rsum_bytes, int checksum_bytes, int seq_matches);
 	int zsync_sha1(int fh);
 	int zsync_recompress();
