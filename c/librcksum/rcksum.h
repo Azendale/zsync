@@ -14,6 +14,9 @@
  *   COPYING file for details.
  */
 
+#ifndef RCKSUM_H
+#define RCKSUM_H
+
 /* This is the library interface. Very changeable at this stage. */
 
 #include <stdio.h>
@@ -59,3 +62,4 @@ int rcksum_blocks_todo(const struct rcksum_state*);
 struct rsum __attribute__((pure)) rcksum_calc_rsum_block(const unsigned char* data, size_t len);
 void rcksum_calc_checksum(unsigned char *c, const unsigned char* data, size_t len);
 
+#endif

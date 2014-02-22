@@ -16,8 +16,16 @@
 #ifndef ZSYNC_H
 #define ZSYNC_H
 
+
+// Tell the C++ compiler that these are C functions
+extern "C" {
 #include "zlib/zlib.h"
 
+#include "librcksum/rcksum.h"
+#include "zsync.h"
+#include "sha1.h"
+#include "zmap.h"
+}
 class ZsyncState
 {
 public:
