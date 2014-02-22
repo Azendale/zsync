@@ -713,6 +713,7 @@ int main(int argc, char **argv) {
      * down the zsync_state as we are done on the file transfer. Getting the
      * current name of the file at the same time. */
     mtime = zsync_mtime(zs);
+	// TODO: should be changed to zs.zsync_cur_filename() followed by delete zs;.
     temp_file = zsync_end(zs);
 
     /* STEP 5: Move completed .part file into place as the final target */

@@ -47,9 +47,9 @@ public:
     char *gzhead;               /* And this is the header of the gzip file (for the mtime) */
 
     time_t mtime;               /* MTime: from the .zsync, or -1 */
-
 /* zsync_begin - load a zsync file and return data structure to use for the rest of the process.
  */
+// TODO: this is the constructor
 void zsync_begin(FILE* cf);
 /* zsync_hint_decompress - if it returns non-zero, this suggests that 
  *  compressed seed files should be decompressed */
@@ -106,9 +106,20 @@ int zsync_complete(struct zsync_state* zs);
 
 /* Clean up and free all resources. The pointer is freed by this call.
  * Returns a strdup()d pointer to the name of the file resulting from the process. */
+// TODO: sounds like this should be the destructor
 char* zsync_end(struct zsync_state* zs);
 
 private:
+	int zsync_read_blocksums(struct zsync_state *zs, FILE * f,
+                                int rsum_bytes, int checksum_bytes,
+                                int seq_matches);
+int zsync_sha1(struct zsync_state *zs, int fh);
+int zsync_recompress(struct zsync_state *zs);
+time_t parse_822(const char* ts);
+zsync_submit_data(struct zsync_state *zs,
+                             const unsigned char *buf, off_t offset,
+                             int blocks);
+
 };
 
 
