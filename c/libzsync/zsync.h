@@ -125,8 +125,10 @@ public:
  *  first.
  * The url_type is as in the value returned by zsync_get_url.
  */
-void zsync_begin_receive(struct zsync_state*zs, int url_type);
-void zsync_end_receive();
+	ZsyncReceiver(class ZsyncState *zs_in, int url_type);
+	void zsync_begin_receive(class ZsyncState *zs_in, int url_type);
+// replaced by destructor
+//void zsync_end_receive();
 
 /* Supply data buf of length len received corresponding to offset offset from the URL.
  * Returns 0 for success; if not, you should not submit more data. */

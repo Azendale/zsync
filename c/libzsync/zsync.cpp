@@ -803,28 +803,18 @@ static int zsync_submit_data(struct zsync_state *zs,
 
 /****************************************************************************
  *
- * zsync_receiver object definition and methods.
+ * ZsyncReceiver object definition and methods.
  * Stores the state for a currently-running download of blocks from a
  * particular URL or version of a file to complete a file using zsync.
  *
- * This is mostly a wrapper for the zsync_state which keeps various additional
+ * This is mostly a wrapper for the ZsyncState which keeps various additional
  * state needed per-download: in particular the zlib stream object to
  * decompress the incoming data if this is a URL of a compressed version of the
  * target file.
  */
-struct zsync_receiver {
-    struct zsync_state *zs;     /* The zsync_state that we are downloading for */
-    struct z_stream_s strm;     /* Decompression object */
-    int url_type;               /* Compressed or not */
-    unsigned char *outbuf;      /* Working buffer to keep incomplete blocks of data */
-    off_t outoffset;            /* and the position in that buffer */
-};
 
 /* Constructor */
-// TODO: should also put as ZsyncReceiver::ZsyncReceiver(int url_type);
 void ZsyncReceiver::zsync_begin_receive(class ZsyncState *zs_in, int url_type) {
-    // I think this is safe to comment, because it was previously probably going to just be for returning the initialized object. Since were C++ing, then we don't need that
-    //struct zsync_receiver *zr = (zsync_receiver*)(sizeof(struct zsync_receiver));
 
     // save the pointer to the ZsyncState we are working on/for
     zs = zs_in;
@@ -844,6 +834,25 @@ void ZsyncReceiver::zsync_begin_receive(class ZsyncState *zs_in, int url_type) {
     outoffset = 0;
 }
 
+ZsyncReceiver::ZsyncReceiver(class ZsyncState *zs_in, int url_type) {
+
+    // save the pointer to the ZsyncState we are working on/for
+    zs = zs_in;
+
+	// Create a buffer the size of the ZsyncState object's blocksize
+    outbuf = new unsigned char [zs->blocksize];
+
+    /* Set up new inflate object */
+	// strm is a data member of ZsyncReceiver
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = NULL;
+    strm.total_in = 0;
+
+	// Both data members of the class
+    url_type = url_type;
+    outoffset = 0;
+}
 
 
 /* zsync_receive_data_uncompressed(self, buf[], offset, buflen)

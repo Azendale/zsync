@@ -387,6 +387,7 @@ int ZsyncClient::fetch_remaining_blocks_http(const char *url, int type) {
     /* Create a read buffer */
     buf = (unsigned char *)malloc(BUFFERSIZE);
     if (!buf) {
+		// TODO: needs to be replaced with a call to the destructor for zr
         zsync_end_receive(zr);
         range_fetch_end(rf);
         free(u);
