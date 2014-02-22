@@ -544,10 +544,8 @@ int main(int argc, char **argv) {
     /* STEP 1: Read the zsync control file */
     const char * zfname_cstr = zfname.c_str();
     if ((zs = read_zsync_control_file(argv[optind], zfname_cstr)) == NULL) {
-        delete [] zfname_cstr;
         exit(1);
     }
-    delete [] zfname_cstr;
 
     /* Get eventual filename for output, and filename to write to while working */
     if (filename.empty())
@@ -567,7 +565,6 @@ int main(int argc, char **argv) {
         if (!access(filename_cstr, R_OK)) {
             seedfiles.push_back(filename);
         }
-        delete [] filename_cstr;
         /* If the .part file exists, it's probably an interrupted earlier
          * effort; a normal HTTP client would 'resume' from where it got to,
          * but zsync can't (because we don't know this data corresponds to the
@@ -602,7 +599,6 @@ int main(int argc, char **argv) {
             if (!dup) {
                 const char * seedfile_i_cstr = seedfiles[i].c_str();
                 read_seed_file(zs, seedfile_i_cstr);
-                delete [] seedfile_i_cstr;
             }
         }
         
@@ -660,7 +656,6 @@ int main(int argc, char **argv) {
         }
     }
     
-    delete [] temp_file_cstr;
 
     /* Get any mtime that we is suggested to set for the file, and then shut
      * down the zsync_state as we are done on the file transfer. Getting the
@@ -716,8 +711,6 @@ int main(int argc, char **argv) {
         }
         // std::string that is oldfile_backup will automatically be released when it goes out of scope.
         // Just need to free the dynamic memory we allocated when we made a cstring from it.
-        delete [] oldfile_backup_cstr;
-        delete [] filename_cstr;
     }
     else {
         printf
@@ -729,6 +722,5 @@ int main(int argc, char **argv) {
     if (!no_progress)
         printf("used %lld local, fetched %lld\n", local_used, http_down);
     free(referer);
-    delete [] temp_file_cstr;
     return 0;
 }
