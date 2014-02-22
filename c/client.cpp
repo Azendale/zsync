@@ -46,6 +46,58 @@ extern "C" {
 #include "progress.h"
 }
 
+class ZsyncClient
+{
+public:
+/* read_seed_file(zsync, filename_str)
+ * Reads the given file (decompressing it if appropriate) and applies the rsync
+ * checksum algorithm to it, so any data that is contained in the target file
+ * is written to the in-progress target. So use this function to supply local
+ * source files which are believed to have data in common with the target.
+ */
+	void read_seed_file(const char *fname);
+	
+/* zs = read_zsync_control_file(location_str, filename)
+ * Reads a zsync control file from either a URL or filename specified in
+ * location_str. This is treated as a URL if no local file exists of that name
+ * and it starts with a URL scheme ; only http URLs are supported.
+ * Second parameter is a filename in which to locally save the content of the
+ * .zsync _if it is retrieved from a URL_; can be NULL in which case no local
+ * copy is made.
+ */
+	void read_zsync_control_file(const char *p, const char *fn);
+/* str = get_filename_prefix(path_str)
+ * Returns a (malloced) string of the alphanumeric leading segment of the
+ * filename in the given file path.
+ */
+	char *get_filename_prefix(const char *p);
+/* filename_str = get_filename(zs, source_filename_str)
+ * Returns a (malloced string with a) suitable filename for a zsync download,
+ * using the given zsync state and source filename strings as hints. */
+	std::string get_filename(const char *source_name);
+/* prog = calc_zsync_progress(zs)
+ * Returns the progress ratio 0..1 (none...done) for the given zsync_state */
+	float calc_zsync_progress();
+/* fetch_remaining_blocks_http(zs, url, type)
+ * For the given zsync_state, using the given URL (which is a copy of the
+ * actual content of the target file is type == 0, or a compressed copy of it
+ * if type == 1), retrieve the parts of the target that are currently missing. 
+ * Returns true if this URL was useful, false if we crashed and burned.
+ */
+	int fetch_remaining_blocks_http(const char *url, int type);
+/* fetch_remaining_blocks(zs)
+ * Using the URLs in the supplied zsync state, downloads data to complete the
+ * target file. 
+ */
+	int fetch_remaining_blocks();
+
+
+private:
+	struct zsync_state;
+};
+
+
+
 /* FILE* f = open_zcat_pipe(file_str)
  * Returns a (popen) filehandle which when read returns the un-gzipped content
  * of the given file. Or NULL on error; or the filehandle may fail to read. It
@@ -81,6 +133,7 @@ FILE* open_zcat_pipe(const char* fname)
     }
 }
 
+// TODO: Make part of ZsyncClient class
 /* read_seed_file(zsync, filename_str)
  * Reads the given file (decompressing it if appropriate) and applies the rsync
  * checksum algorithm to it, so any data that is contained in the target file
@@ -143,6 +196,7 @@ void read_seed_file(struct zsync_state *z, const char *fname) {
 
 long long http_down;
 
+// TODO: Make part of ZsyncClient Class
 /* zs = read_zsync_control_file(location_str, filename)
  * Reads a zsync control file from either a URL or filename specified in
  * location_str. This is treated as a URL if no local file exists of that name
