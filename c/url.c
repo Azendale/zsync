@@ -37,7 +37,7 @@ const char http_scheme[] = { "http://" };
  * Or return value NULL on failure (host and port could have been written to).
  */
 char *get_http_host_port(const char *url, char *hostn, int hnlen, char **port) {
-    char *p, *q;
+    const char *p, *q;
 
     /* Check it's HTTP */
     if (memcmp(url, http_scheme, strlen(http_scheme)))
@@ -77,7 +77,9 @@ char *get_http_host_port(const char *url, char *hostn, int hnlen, char **port) {
         if (!p)
             p = strdup("/");
     }
-    return p;
+    
+    char * ret = (char *)p;
+    return ret;
 }
 
 /* abs_url_str = make_url_absolute(base_str, url_str)

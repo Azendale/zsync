@@ -718,7 +718,7 @@ int main(int argc, char **argv) {
     read_stream_write_blocksums(instream, tf);
 
     {   /* Decide how long a rsum hash and checksum hash per block we need for this file */
-        seq_matches = len > blocksize ? 2 : 1;
+        seq_matches = len > (off_t)blocksize ? 2 : 1;
         rsum_len = ceil(((log(len) + log(blocksize)) / log(2) - 8.6) / seq_matches / 8);
 
         /* min and max lengths of rsums to store */
@@ -836,7 +836,7 @@ int main(int argc, char **argv) {
                     fprintf(fout, "MTime: %s\n", buf);
             }
             else {
-                fprintf(stderr, "error converting %d to struct tm\n", mtime);
+                fprintf(stderr, "error converting %d to struct tm\n", (int)mtime);
             }
         }
     }
