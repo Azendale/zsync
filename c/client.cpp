@@ -527,7 +527,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> seedfiles;
     std::string filename;
     long long local_used;
-    std::string zfname;
+    std::string zfname = "";
     time_t mtime;
 
     srand(getpid());
@@ -602,7 +602,8 @@ int main(int argc, char **argv) {
     }
 
     ZsyncClient zc;
-	zc.read_zsync_control_file(argv[optind], zfname.c_str());
+	// Condintional pass because the function expects a NULL pointer if the string is empty/not set
+	zc.read_zsync_control_file(argv[optind], ( zfname.empty() ? NULL : zfname.c_str() ) );
 #if 0
     /* STEP 1: Read the zsync control file */
     if ((zs = read_zsync_control_file(argv[optind], zfname.c_str())) == NULL) {
